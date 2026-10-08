@@ -883,7 +883,17 @@ export class QuoteService {
      */
     async acceptAndConvert(quoteId, note, adminUserId) {
         const fullQuote = await this.getById(quoteId, { sub: adminUserId || '', role: 'admin', email: '', fullName: '' });
+        const realQuoteId = fullQuote.id;
         if (fullQuote.status === 'approved') {
+            const [existingProject] = await db.select().from(projects).where(eq(projects.quoteId, realQuoteId)).limit(1);
+            if (existingProject) {
+                return {
+                    quote: fullQuote,
+                    project: existingProject,
+                    upfrontInvoice: null,
+                    finalInvoice: null,
+                };
+            }
             throw new QuoteError('This quote has already been approved and converted', 409, 'ALREADY_APPROVED');
         }
         const currentV = fullQuote.activeVersion;
@@ -898,7 +908,7 @@ export class QuoteService {
                 status: 'approved',
                 updatedAt: new Date(),
             })
-                .where(eq(quotes.id, quoteId))
+                .where(eq(quotes.id, realQuoteId))
                 .returning();
             // 2. Lock approved version
             await tx
@@ -949,7 +959,7 @@ export class QuoteService {
                     })
                         .returning();
                     customerId = newCust.id;
-                    await tx.update(quotes).set({ customerId }).where(eq(quotes.id, quoteId));
+                    await tx.update(quotes).set({ customerId }).where(eq(quotes.id, realQuoteId));
                     await tx.update(leads).set({ customerId }).where(eq(leads.id, approvedQuote.leadId));
                 }
             }
@@ -967,7 +977,7 @@ export class QuoteService {
                 })
                     .returning();
                 customerId = fallbackCust.id;
-                await tx.update(quotes).set({ customerId }).where(eq(quotes.id, quoteId));
+                await tx.update(quotes).set({ customerId }).where(eq(quotes.id, realQuoteId));
             }
             // 4. Create Project with status = 'in_progress' and orderStatus = 'in_voorbereiding'
             const projectNumber = await this.generateProjectNumber(0, tx);

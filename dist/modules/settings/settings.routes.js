@@ -2,13 +2,15 @@ import { settingsService, SettingsError } from './settings.service.js';
 import { updateCompanySettingsSchema, configSectionParamSchema, createSystemUserSchema, updateUserStatusSchema, updateUserRoleSchema, } from './settings.schema.js';
 import { z } from 'zod';
 export const settingsRoutes = async (fastify) => {
-    // All Settings routes require Admin authorization
+    // Admin Guard for sensitive mutation & user management routes
     const adminGuard = { preHandler: [fastify.authenticate, fastify.authorize(['admin'])] };
+    // Read Guard for general company & platform breakdown configs
+    const readCompanyGuard = { preHandler: [fastify.authenticate, fastify.authorize(['admin', 'partner', 'customer'])] };
     /**
      * 1. GET /api/settings/company
      * Fetch company profile, financial configurations, VAT rates, numbering prefixes, and dynamic JSON configs
      */
-    fastify.get('/company', adminGuard, async (request, reply) => {
+    fastify.get('/company', readCompanyGuard, async (request, reply) => {
         try {
             const settings = await settingsService.getCompanySettings();
             return reply.send({ success: true, data: settings });
