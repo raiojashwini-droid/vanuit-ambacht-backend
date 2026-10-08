@@ -1,0 +1,52 @@
+{
+  "name": "vanuit-ambacht-backend",
+  "version": "1.0.0",
+  "description": "Fastify + TypeScript + Drizzle ORM + PostgreSQL Backend for Vanuit Ambacht",
+  "main": "src/server.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "test:auth": "tsx src/tests/auth.test.ts",
+    "test:cust-part": "tsx src/tests/customers_partners.test.ts",
+    "test:leads": "tsx src/tests/leads.test.ts",
+    "test:partner-requests": "tsx src/tests/partner_requests.test.ts",
+    "test:quotes": "tsx src/tests/quotes.test.ts",
+    "test:projects": "tsx src/tests/projects.test.ts",
+    "test:invoices": "tsx src/tests/invoices.test.ts",
+    "test:payments-bank": "tsx src/tests/payments_bank.test.ts",
+    "test:accounting": "tsx src/tests/accounting.test.ts",
+    "test:tasks": "tsx src/tests/tasks.test.ts",
+    "test:conversations": "tsx src/tests/conversations.test.ts",
+    "test:dashboard": "tsx src/tests/dashboard.test.ts",
+    "test:settings": "tsx src/tests/settings.test.ts",
+    "test:documents": "tsx src/tests/documents.test.ts",
+    "test:reports-profile": "tsx src/tests/reports_profile.test.ts",
+    "test:all": "tsx src/tests/auth.test.ts && tsx src/tests/customers_partners.test.ts && tsx src/tests/leads.test.ts && tsx src/tests/partner_requests.test.ts && tsx src/tests/quotes.test.ts && tsx src/tests/projects.test.ts && tsx src/tests/invoices.test.ts && tsx src/tests/payments_bank.test.ts && tsx src/tests/accounting.test.ts && tsx src/tests/tasks.test.ts && tsx src/tests/conversations.test.ts && tsx src/tests/dashboard.test.ts && tsx src/tests/settings.test.ts && tsx src/tests/documents.test.ts && tsx src/tests/reports_profile.test.ts",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^10.0.2",
+    "@fastify/jwt": "^9.0.4",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.38.4",
+    "fastify": "^5.2.1",
+    "fastify-plugin": "^6.0.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.13.1",
+    "drizzle-kit": "^0.30.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
