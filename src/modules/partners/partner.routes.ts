@@ -226,11 +226,36 @@ export const partnerRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      const effectiveRole = request.effectiveRole || request.user.role;
+      if (effectiveRole === 'partner') {
+        const myProfileId = request.effectiveProfileId || request.user.profileId;
+        if (paramResult.data.id !== myProfileId) {
+          try {
+            const dossier = await partnerService.getDossier(paramResult.data.id);
+            if (dossier.userId !== request.user.sub && dossier.id !== myProfileId) {
+              return reply.status(403).send({
+                success: false,
+                error: { code: 'FORBIDDEN', message: 'Access denied. You may only update your own workload.' },
+              });
+            }
+          } catch {
+            return reply.status(403).send({
+              success: false,
+              error: { code: 'FORBIDDEN', message: 'Access denied. You may only update your own workload.' },
+            });
+          }
+        }
+      }
+
       try {
-        const updated = await partnerService.updateWorkload(paramResult.data.id, parseResult.data.workloadStatus);
+        const updated = await partnerService.updateWorkload(
+          paramResult.data.id,
+          parseResult.data.workloadStatus,
+          parseResult.data.availableWeeks
+        );
         return reply.status(200).send({
           success: true,
-          message: `Workload status updated to '${parseResult.data.workloadStatus}'`,
+          message: `Workload status updated successfully`,
           data: updated,
         });
       } catch (err: any) {

@@ -21,6 +21,7 @@ export const createPartnerSchema = z.object({
     btwNumber: z.string().trim().max(50).nullable().optional(),
     region: z.string().trim().max(100).nullable().optional(),
     workloadStatus: partnerWorkloadEnumSchema.default('available'),
+    availableWeeks: z.array(z.coerce.number().int().min(1).max(53)).nullable().optional(),
     rating: z.coerce.number().min(1.0).max(5.0).default(5.0),
     specialties: z.array(z.string()).nullable().optional(),
     productTypes: z.array(z.string()).nullable().optional(),
@@ -29,7 +30,10 @@ export const createPartnerSchema = z.object({
 });
 export const updatePartnerSchema = createPartnerSchema.partial();
 export const updateWorkloadSchema = z.object({
-    workloadStatus: partnerWorkloadEnumSchema,
+    workloadStatus: partnerWorkloadEnumSchema.optional(),
+    availableWeeks: z.array(z.coerce.number().int().min(1).max(53)).nullable().optional(),
+}).refine(data => data.workloadStatus !== undefined || data.availableWeeks !== undefined, {
+    message: 'At least one of workloadStatus or availableWeeks must be provided',
 });
 export const ratePartnerSchema = z.object({
     rating: z.coerce.number().min(1.0, 'Minimum rating is 1.00').max(5.0, 'Maximum rating is 5.00'),

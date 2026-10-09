@@ -282,4 +282,111 @@ export const partnerDashboardRoutes = async (fastify) => {
             });
         }
     });
+    /**
+     * 5. GET /api/partner/workload
+     * Partner fetches their own current workload status and available calendar weeks
+     */
+    fastify.get('/workload', partnerGuard, async (request, reply) => {
+        try {
+            const partnerId = await resolvePartnerId(request.user);
+            if (!partnerId) {
+                return reply.status(403).send({
+                    success: false,
+                    error: { code: 'NO_PARTNER_PROFILE', message: 'No partner profile associated with this account' },
+                });
+            }
+            const [partnerRow] = await db
+                .select({
+                id: partners.id,
+                companyName: partners.companyName,
+                workloadStatus: partners.workloadStatus,
+                availableWeeks: partners.availableWeeks,
+            })
+                .from(partners)
+                .where(eq(partners.id, partnerId))
+                .limit(1);
+            if (!partnerRow) {
+                return reply.status(404).send({
+                    success: false,
+                    error: { code: 'NOT_FOUND', message: 'Partner profile not found' },
+                });
+            }
+            return reply.send({
+                success: true,
+                data: {
+                    id: partnerRow.id,
+                    companyName: partnerRow.companyName,
+                    workloadStatus: partnerRow.workloadStatus,
+                    availableWeeks: partnerRow.availableWeeks || [],
+                },
+            });
+        }
+        catch (err) {
+            fastify.log.error(err);
+            return reply.status(500).send({
+                success: false,
+                error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch partner workload' },
+            });
+        }
+    });
+    /**
+     * 6. PATCH /api/partner/workload
+     * Partner updates their own workload status and available calendar weeks
+     */
+    fastify.patch('/workload', partnerGuard, async (request, reply) => {
+        const workloadCheck = z.object({
+            workloadStatus: z.enum(['available', 'busy', 'fully_booked', 'inactive']).optional(),
+            availableWeeks: z.array(z.coerce.number().int().min(1).max(53)).nullable().optional(),
+        }).refine(data => data.workloadStatus !== undefined || data.availableWeeks !== undefined, {
+            message: 'At least one of workloadStatus or availableWeeks must be provided',
+        }).safeParse(request.body);
+        if (!workloadCheck.success) {
+            return reply.status(400).send({
+                success: false,
+                error: { code: 'VALIDATION_ERROR', message: workloadCheck.error.issues[0]?.message },
+            });
+        }
+        try {
+            const partnerId = await resolvePartnerId(request.user);
+            if (!partnerId) {
+                return reply.status(403).send({
+                    success: false,
+                    error: { code: 'NO_PARTNER_PROFILE', message: 'No partner profile associated with this account' },
+                });
+            }
+            const updateData = { updatedAt: new Date() };
+            if (workloadCheck.data.workloadStatus !== undefined) {
+                updateData.workloadStatus = workloadCheck.data.workloadStatus;
+            }
+            if (workloadCheck.data.availableWeeks !== undefined) {
+                updateData.availableWeeks = workloadCheck.data.availableWeeks;
+            }
+            const [updated] = await db
+                .update(partners)
+                .set(updateData)
+                .where(eq(partners.id, partnerId))
+                .returning({
+                id: partners.id,
+                companyName: partners.companyName,
+                workloadStatus: partners.workloadStatus,
+                availableWeeks: partners.availableWeeks,
+                updatedAt: partners.updatedAt,
+            });
+            return reply.send({
+                success: true,
+                message: 'Beschikbaarheid en werkdruk succesvol bijgewerkt',
+                data: {
+                    ...updated,
+                    availableWeeks: updated.availableWeeks || [],
+                },
+            });
+        }
+        catch (err) {
+            fastify.log.error(err);
+            return reply.status(500).send({
+                success: false,
+                error: { code: 'INTERNAL_ERROR', message: 'Failed to update partner workload' },
+            });
+        }
+    });
 };

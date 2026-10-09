@@ -131,6 +131,7 @@ export class PartnerService {
       btwNumber: r.btwNumber,
       region: r.region,
       workloadStatus: r.workloadStatus as PartnerWorkloadStatus,
+      availableWeeks: r.availableWeeks || [],
       rating: r.rating,
       specialties: r.specialties,
       productTypes: r.productTypes,
@@ -209,6 +210,7 @@ export class PartnerService {
       btwNumber: partnerRecord.btwNumber,
       region: partnerRecord.region,
       workloadStatus: partnerRecord.workloadStatus as PartnerWorkloadStatus,
+      availableWeeks: partnerRecord.availableWeeks || [],
       rating: partnerRecord.rating,
       specialties: partnerRecord.specialties,
       productTypes: partnerRecord.productTypes,
@@ -277,6 +279,7 @@ export class PartnerService {
         btwNumber: data.btwNumber || null,
         region: data.region || null,
         workloadStatus: data.workloadStatus,
+        availableWeeks: data.availableWeeks || null,
         rating: data.rating.toFixed(2),
         specialties: data.specialties || null,
         productTypes: data.productTypes || null,
@@ -296,6 +299,7 @@ export class PartnerService {
       btwNumber: created.btwNumber,
       region: created.region,
       workloadStatus: created.workloadStatus as PartnerWorkloadStatus,
+      availableWeeks: created.availableWeeks || [],
       rating: created.rating,
       specialties: created.specialties,
       productTypes: created.productTypes,
@@ -353,6 +357,7 @@ export class PartnerService {
       btwNumber: updated.btwNumber,
       region: updated.region,
       workloadStatus: updated.workloadStatus as PartnerWorkloadStatus,
+      availableWeeks: updated.availableWeeks || [],
       rating: updated.rating,
       specialties: updated.specialties,
       productTypes: updated.productTypes,
@@ -364,10 +369,17 @@ export class PartnerService {
   }
 
   /**
-   * Dedicated action: Update workload status
+   * Dedicated action: Update workload status and available weeks
    */
-  async updateWorkload(id: string, workloadStatus: PartnerWorkloadStatus): Promise<PartnerListItem> {
-    return this.update(id, { workloadStatus });
+  async updateWorkload(
+    id: string,
+    workloadStatus?: PartnerWorkloadStatus,
+    availableWeeks?: number[] | null
+  ): Promise<PartnerListItem> {
+    const updatePayload: UpdatePartnerInput = {};
+    if (workloadStatus !== undefined) updatePayload.workloadStatus = workloadStatus;
+    if (availableWeeks !== undefined) updatePayload.availableWeeks = availableWeeks;
+    return this.update(id, updatePayload);
   }
 
   /**

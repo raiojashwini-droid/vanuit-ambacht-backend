@@ -11,6 +11,7 @@ export interface PartnerListItem {
   btwNumber: string | null;
   region: string | null;
   workloadStatus: PartnerWorkloadStatus;
+  availableWeeks?: number[] | null;
   rating: string;
   specialties: string[] | null;
   productTypes: string[] | null;

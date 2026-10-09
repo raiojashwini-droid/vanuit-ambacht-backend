@@ -82,6 +82,7 @@ export const partners = pgTable('partners', {
     btwNumber: varchar('btw_number', { length: 50 }),
     region: varchar('region', { length: 100 }),
     workloadStatus: partnerWorkloadEnum('workload_status').default('available').notNull(),
+    availableWeeks: integer('available_weeks').array(),
     rating: numeric('rating', { precision: 3, scale: 2 }).default('5.00').notNull(),
     specialties: text('specialties').array(),
     productTypes: text('product_types').array(),
