@@ -43,9 +43,10 @@ export const planningRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [fastify.authenticate, fastify.authorize(['admin', 'partner'])] },
     async (request, reply) => {
       const query = request.query as any;
+      const partnerId = request.user.role === 'partner' ? request.user.profileId : query.partnerId;
       const events = await planningService.getEvents({
         calendarLane: query.calendarLane,
-        partnerId: query.partnerId,
+        partnerId: partnerId || undefined,
         projectId: query.projectId,
         status: query.status,
       });

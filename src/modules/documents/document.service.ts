@@ -10,7 +10,7 @@ import {
   partnerPriceRequests,
   users,
 } from '../../db/schema.js';
-import { eq, and, or, sql, desc, ilike } from 'drizzle-orm';
+import { eq, and, or, sql, desc, ilike, inArray } from 'drizzle-orm';
 import { storageService } from '../../services/storage.service.js';
 import type { DocumentDto, createDocumentSchema, updateDocumentSchema, documentQuerySchema } from './document.types.js';
 import type { JwtTokenPayload } from '../../types/auth.types.js';
@@ -154,29 +154,33 @@ export class DocumentService {
       conditions.push(eq(documents.isPublicForPartner, true));
 
       if (partnerId) {
-        // Partner sees docs linked to their partnerId, assigned projects, or general company docs
+        // Partner sees docs linked to their partnerId, assigned projects, assigned price request leads, or general company docs
         const partnerProjects = await db
           .select({ id: projects.id })
           .from(projects)
           .where(eq(projects.partnerId, partnerId));
         const pIds = partnerProjects.map((p) => p.id);
 
+        const partnerRequests = await db
+          .select({ leadId: partnerPriceRequests.leadId })
+          .from(partnerPriceRequests)
+          .where(eq(partnerPriceRequests.partnerId, partnerId));
+        const reqLeadIds = partnerRequests.map((r) => r.leadId).filter(Boolean);
+
+        const orConditions = [
+          eq(documents.partnerId, partnerId),
+          sql`num_nonnulls(${documents.projectId}, ${documents.quoteId}, ${documents.partnerId}, ${documents.leadId}, ${documents.invoiceId}) = 0`
+        ];
+
         if (pIds.length > 0) {
-          conditions.push(
-            or(
-              eq(documents.partnerId, partnerId),
-              sql`${documents.projectId} IN ${pIds}`,
-              sql`num_nonnulls(${documents.projectId}, ${documents.quoteId}, ${documents.partnerId}, ${documents.leadId}, ${documents.invoiceId}) = 0`
-            )
-          );
-        } else {
-          conditions.push(
-            or(
-              eq(documents.partnerId, partnerId),
-              sql`num_nonnulls(${documents.projectId}, ${documents.quoteId}, ${documents.partnerId}, ${documents.leadId}, ${documents.invoiceId}) = 0`
-            )
-          );
+          orConditions.push(inArray(documents.projectId, pIds));
         }
+
+        if (reqLeadIds.length > 0) {
+          orConditions.push(inArray(documents.leadId, reqLeadIds));
+        }
+
+        conditions.push(or(...orConditions));
       }
     }
 

@@ -40,8 +40,14 @@ const server = Fastify({
 const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
 await server.register(cors, {
   origin: (origin, cb) => {
-    // Allow requests with no origin (like mobile apps, curl, postman) or matching origin
-    if (!origin || origin === allowedOrigin || origin.startsWith('http://localhost:')) {
+    // Allow requests with no origin, allowedOrigin, localhost, netlify or railway domains
+    if (
+      !origin ||
+      origin === allowedOrigin ||
+      origin.startsWith('http://localhost:') ||
+      origin.includes('netlify.app') ||
+      origin.includes('railway.app')
+    ) {
       cb(null, true);
       return;
     }
