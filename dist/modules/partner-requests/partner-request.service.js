@@ -198,11 +198,50 @@ export class PartnerRequestService {
                 }
             }
         }
+        // Fetch tender attachments for these requests
+        const leadIds = rows.map((r) => r.request.leadId).filter(Boolean);
+        const partnerIds = rows.map((r) => r.request.partnerId).filter(Boolean);
+        let attachmentsByLeadMap = {};
+        if (leadIds.length > 0 || partnerIds.length > 0) {
+            const docConditions = [];
+            const orParts = [];
+            if (leadIds.length > 0)
+                orParts.push(inArray(documents.leadId, leadIds));
+            if (partnerIds.length > 0)
+                orParts.push(inArray(documents.partnerId, partnerIds));
+            if (orParts.length > 0)
+                docConditions.push(or(...orParts));
+            if (user.role === 'partner')
+                docConditions.push(eq(documents.isPublicForPartner, true));
+            const rawDocs = await db
+                .select()
+                .from(documents)
+                .where(and(...docConditions))
+                .orderBy(desc(documents.createdAt));
+            for (const d of rawDocs) {
+                const key = d.leadId || d.partnerId;
+                if (key) {
+                    if (!attachmentsByLeadMap[key])
+                        attachmentsByLeadMap[key] = [];
+                    attachmentsByLeadMap[key].push({
+                        id: d.id,
+                        fileName: d.fileName,
+                        fileUrl: d.fileUrl,
+                        mimeType: d.mimeType || 'application/octet-stream',
+                        fileSizeBytes: d.fileSizeBytes || 0,
+                        category: d.category || null,
+                        createdAt: d.createdAt.toISOString(),
+                    });
+                }
+            }
+        }
         // Build DTOs
         const items = rows.map(({ request: r, partnerCompanyName }) => {
+            const attachments = attachmentsByLeadMap[r.leadId] || (r.partnerId ? attachmentsByLeadMap[r.partnerId] : []) || [];
             return this.mapRequestToDto(r, user.role, {
                 partnerName: partnerCompanyName || undefined,
                 activeOffer: activeOffersMap[r.id] || null,
+                attachments,
             });
         });
         return {

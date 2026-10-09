@@ -31,7 +31,24 @@ function getDbOptions() {
 export const sqlClient = postgres({
     ...getDbOptions(),
     max: 10,
-    idle_timeout: 20,
-    connect_timeout: 10,
+    idle_timeout: 0, // Keep pool connections alive permanently
+    connect_timeout: 30,
 });
+// Pre-warm connections & keep them alive to eliminate remote latency
+(async () => {
+    try {
+        await Promise.all([
+            sqlClient `SELECT 1`,
+            sqlClient `SELECT 1`,
+            sqlClient `SELECT 1`,
+        ]);
+    }
+    catch {
+        // ignore
+    }
+    // Heartbeat ping every 20s to ensure remote Railway proxy keeps TCP socket hot
+    setInterval(() => {
+        sqlClient `SELECT 1`.catch(() => { });
+    }, 20000);
+})();
 export const db = drizzle(sqlClient, { schema });

@@ -1,4 +1,4 @@
-import { eq, or, ilike, sql, desc, asc, and } from 'drizzle-orm';
+import { eq, or, ilike, sql, desc, asc, and, inArray } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import {
   leads,
@@ -7,6 +7,9 @@ import {
   tasks,
   customers,
   users,
+  partnerPriceRequests,
+  partnerOffers,
+  quotes,
 } from '../../db/schema.js';
 import { customerService } from '../customers/customer.service.js';
 import type {
@@ -844,7 +847,7 @@ export class LeadService {
   }
 
   /**
-   * Delete lead with dependency checks
+   * Delete lead with safe dependency clean-up
    */
   async delete(id: string): Promise<{ deleted: boolean; leadNumber: string }> {
     const [existing] = await db.select().from(leads).where(eq(leads.id, id)).limit(1);
@@ -852,7 +855,55 @@ export class LeadService {
       throw new LeadError('Lead not found', 404, 'LEAD_NOT_FOUND');
     }
 
-    await db.delete(leads).where(eq(leads.id, id));
+    await db.transaction(async (tx) => {
+      // 1. Handle Partner Price Requests & Offers (RESTRICT constraint on leadId)
+      const pprs = await tx
+        .select({ id: partnerPriceRequests.id })
+        .from(partnerPriceRequests)
+        .where(eq(partnerPriceRequests.leadId, id));
+
+      if (pprs.length > 0) {
+        const pprIds = pprs.map((p) => p.id);
+
+        const offers = await tx
+          .select({ id: partnerOffers.id })
+          .from(partnerOffers)
+          .where(inArray(partnerOffers.requestId, pprIds));
+
+        if (offers.length > 0) {
+          const offerIds = offers.map((o) => o.id);
+          // Unlink accepted partner offer from quotes if any
+          await tx
+            .update(quotes)
+            .set({ acceptedPartnerOfferId: null })
+            .where(inArray(quotes.acceptedPartnerOfferId, offerIds));
+
+          // Delete partner offers
+          await tx
+            .delete(partnerOffers)
+            .where(inArray(partnerOffers.requestId, pprIds));
+        }
+
+        // Delete partner price requests
+        await tx
+          .delete(partnerPriceRequests)
+          .where(eq(partnerPriceRequests.leadId, id));
+      }
+
+      // 2. Unlink quotes linked to this lead
+      await tx
+        .update(quotes)
+        .set({ leadId: null })
+        .where(eq(quotes.leadId, id));
+
+      // 3. Delete tasks linked to this lead
+      await tx
+        .delete(tasks)
+        .where(eq(tasks.leadId, id));
+
+      // 4. Finally delete the lead
+      await tx.delete(leads).where(eq(leads.id, id));
+    });
 
     return {
       deleted: true,
