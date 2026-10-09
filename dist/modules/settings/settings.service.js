@@ -50,39 +50,52 @@ export class SettingsService {
             updatedAt: row.updatedAt.toISOString(),
         };
     }
+    cachedCompanySettings = null;
     /**
      * 1. GET /api/settings/company
      * Retrieve company profile, financial configurations, VAT rates, numbering formats, and dynamic JSON configs
      */
     async getCompanySettings() {
-        const [existing] = await db.select().from(companySettings).limit(1);
-        if (existing) {
-            return this.formatCompanySettings(existing);
+        const now = Date.now();
+        if (this.cachedCompanySettings && this.cachedCompanySettings.expiresAt > now) {
+            return this.cachedCompanySettings.data;
         }
-        // If no row exists yet, initialize a default row
-        const [created] = await db
-            .insert(companySettings)
-            .values({
-            companyName: 'Vanuit Ambacht B.V.',
-            website: 'www.vanuitambacht.nl',
-            kvkNumber: 'KVK-88741029',
-            btwNumber: 'NL88741029B01',
-            iban: 'NL91 ABNA 0417 1234 56',
-            bankName: 'ABN AMRO Bank',
-            email: 'info@vanuitambacht.nl',
-            phone: '+31 6 12345678',
-            address: 'Herengracht 1',
-            postalCode: '1015 BG',
-            city: 'Amsterdam',
-            country: 'NL',
-            standardVatRate: '21.00',
-            lowVatRate: '9.00',
-            quotePrefix: '#Q-2004',
-            invoicePrefix: '#INV-902',
-            defaultMarginPercentage: '35.00',
-        })
-            .returning();
-        return this.formatCompanySettings(created);
+        const [existing] = await db.select().from(companySettings).limit(1);
+        let result;
+        if (existing) {
+            result = this.formatCompanySettings(existing);
+        }
+        else {
+            // If no row exists yet, initialize a default row
+            const [created] = await db
+                .insert(companySettings)
+                .values({
+                companyName: 'Vanuit Ambacht B.V.',
+                website: 'www.vanuitambacht.nl',
+                kvkNumber: 'KVK-88741029',
+                btwNumber: 'NL88741029B01',
+                iban: 'NL91 ABNA 0417 1234 56',
+                bankName: 'ABN AMRO Bank',
+                email: 'info@vanuitambacht.nl',
+                phone: '+31 6 12345678',
+                address: 'Herengracht 1',
+                postalCode: '1015 BG',
+                city: 'Amsterdam',
+                country: 'NL',
+                standardVatRate: '21.00',
+                lowVatRate: '9.00',
+                quotePrefix: '#Q-2004',
+                invoicePrefix: '#INV-902',
+                defaultMarginPercentage: '35.00',
+            })
+                .returning();
+            result = this.formatCompanySettings(created);
+        }
+        this.cachedCompanySettings = {
+            data: result,
+            expiresAt: now + 30 * 1000,
+        };
+        return result;
     }
     /**
      * 2. PUT /api/settings/company
@@ -166,6 +179,7 @@ export class SettingsService {
                 .returning();
             resultRow = created;
         }
+        this.cachedCompanySettings = null;
         return this.formatCompanySettings(resultRow);
     }
     /**
@@ -205,6 +219,7 @@ export class SettingsService {
             default:
                 throw new SettingsError(`Unsupported configuration section: ${section}`, 400, 'INVALID_SECTION');
         }
+        this.cachedCompanySettings = null;
         return this.updateCompanySettings(updatePayload);
     }
     /**
