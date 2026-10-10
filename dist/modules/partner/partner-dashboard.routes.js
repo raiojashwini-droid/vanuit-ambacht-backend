@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { projects, planningEvents, partners } from '../../db/schema.js';
-import { eq, and, gte } from 'drizzle-orm';
+import { eq, and, gte, desc } from 'drizzle-orm';
 const updateProgressSchema = z.object({
     progress: z.number().int().min(0).max(100).optional(),
     status: z.enum(['In Progress', 'Review Required', 'Completed', 'in_progress', 'completed', 'pending']).optional(),
@@ -20,11 +20,15 @@ export const partnerDashboardRoutes = async (fastify) => {
         if (user.role === 'admin') {
             if (user.partnerId)
                 return user.partnerId;
+            if (user.profileId)
+                return user.profileId;
             const firstPartner = await db.select({ id: partners.id }).from(partners).limit(1);
             return firstPartner[0]?.id || null;
         }
         if (user.partnerId)
             return user.partnerId;
+        if (user.profileId)
+            return user.profileId;
         const partnerRow = await db
             .select({ id: partners.id })
             .from(partners)
@@ -170,8 +174,9 @@ export const partnerDashboardRoutes = async (fastify) => {
                     error: { code: 'NO_PARTNER_PROFILE', message: 'No partner profile associated with this account' },
                 });
             }
-            const now = new Date();
-            const events = await db
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            let events = await db
                 .select({
                 id: planningEvents.id,
                 title: planningEvents.title,
@@ -183,9 +188,26 @@ export const partnerDashboardRoutes = async (fastify) => {
                 location: planningEvents.location,
             })
                 .from(planningEvents)
-                .where(and(eq(planningEvents.partnerId, partnerId), gte(planningEvents.startTime, now)))
+                .where(and(eq(planningEvents.partnerId, partnerId), gte(planningEvents.startTime, startOfToday)))
                 .orderBy(planningEvents.startTime)
                 .limit(10);
+            if (events.length === 0) {
+                events = await db
+                    .select({
+                    id: planningEvents.id,
+                    title: planningEvents.title,
+                    type: planningEvents.eventType,
+                    startTime: planningEvents.startTime,
+                    endTime: planningEvents.endTime,
+                    lane: planningEvents.calendarLane,
+                    status: planningEvents.status,
+                    location: planningEvents.location,
+                })
+                    .from(planningEvents)
+                    .where(eq(planningEvents.partnerId, partnerId))
+                    .orderBy(desc(planningEvents.startTime))
+                    .limit(10);
+            }
             return reply.send({
                 success: true,
                 data: events,

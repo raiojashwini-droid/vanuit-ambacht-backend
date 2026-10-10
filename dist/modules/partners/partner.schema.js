@@ -27,6 +27,7 @@ export const createPartnerSchema = z.object({
     productTypes: z.array(z.string()).nullable().optional(),
     isActive: z.boolean().default(true),
     userId: z.string().uuid().nullable().optional(),
+    password: z.string().min(4).optional(),
 });
 export const updatePartnerSchema = createPartnerSchema.partial();
 export const updateWorkloadSchema = z.object({

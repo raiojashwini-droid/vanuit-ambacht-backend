@@ -300,33 +300,46 @@ export class SettingsService {
     // 4. Auto-create Partner profile if role is 'partner'
     if (input.role === 'partner') {
       try {
-        const cleanName = (input.fullName || 'PRT')
-          .trim()
-          .toUpperCase()
-          .replace(/[^A-Z0-9]/g, '')
-          .slice(0, 4);
-        const prefix = cleanName ? `PRT-${cleanName}-` : 'PRT-';
-        const [latest] = await db
-          .select({ partnerCode: partners.partnerCode })
+        const [existingPartner] = await db
+          .select({ id: partners.id })
           .from(partners)
-          .where(ilike(partners.partnerCode, `${prefix}%`))
-          .orderBy(desc(partners.partnerCode))
+          .where(eq(partners.email, normalizedEmail))
           .limit(1);
-        const suffix = latest ? parseInt(latest.partnerCode.replace(prefix, ''), 10) : 0;
-        const nextSeq = isNaN(suffix) ? 1 : suffix + 1;
-        const partnerCode = `${prefix}${nextSeq.toString().padStart(2, '0')}`;
 
-        await db.insert(partners).values({
-          userId: newUser.id,
-          partnerCode,
-          companyName: input.fullName.trim(),
-          contactPerson: input.fullName.trim(),
-          email: normalizedEmail,
-          phone: input.phone || '+31 6 00000000',
-          workloadStatus: 'available',
-          rating: '5.00',
-          isActive: true,
-        });
+        if (existingPartner) {
+          await db
+            .update(partners)
+            .set({ userId: newUser.id, updatedAt: new Date() })
+            .where(eq(partners.id, existingPartner.id));
+        } else {
+          const cleanName = (input.fullName || 'PRT')
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '')
+            .slice(0, 4);
+          const prefix = cleanName ? `PRT-${cleanName}-` : 'PRT-';
+          const [latest] = await db
+            .select({ partnerCode: partners.partnerCode })
+            .from(partners)
+            .where(ilike(partners.partnerCode, `${prefix}%`))
+            .orderBy(desc(partners.partnerCode))
+            .limit(1);
+          const suffix = latest ? parseInt(latest.partnerCode.replace(prefix, ''), 10) : 0;
+          const nextSeq = isNaN(suffix) ? 1 : suffix + 1;
+          const partnerCode = `${prefix}${nextSeq.toString().padStart(2, '0')}`;
+
+          await db.insert(partners).values({
+            userId: newUser.id,
+            partnerCode,
+            companyName: input.fullName.trim(),
+            contactPerson: input.fullName.trim(),
+            email: normalizedEmail,
+            phone: input.phone || '+31 6 00000000',
+            workloadStatus: 'available',
+            rating: '5.00',
+            isActive: true,
+          });
+        }
       } catch (err) {
         console.error('Failed to auto-create partner profile in settings:', err);
       }

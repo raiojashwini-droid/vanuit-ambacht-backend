@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 // 1. ENUMS
 // ==========================================
 export const userRoleEnum = pgEnum('user_role', ['admin', 'partner', 'customer']);
+export const partnerCandidateStageEnum = pgEnum('partner_candidate_stage', ['interested', 'in_discussion', 'trial_project', 'active', 'rejected']);
 export const partnerWorkloadEnum = pgEnum('partner_workload', ['available', 'busy', 'fully_booked', 'inactive']);
 export const productTypeEnum = pgEnum('product_type', ['outdoor_kitchen', 'garden_room', 'canopy', 'bin_storage']);
 export const leadStatusEnum = pgEnum('lead_status', ['new', 'in_conversation', 'price_requested', 'price_received', 'quote_sent', 'won', 'lost']);
@@ -91,6 +92,29 @@ export const partners = pgTable('partners', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
     index('idx_partners_workload').on(table.workloadStatus),
+]);
+export const partnerCandidates = pgTable('partner_candidates', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    candidateNumber: varchar('candidate_number', { length: 50 }).notNull().unique(),
+    name: varchar('name', { length: 150 }).notNull(),
+    companyName: varchar('company_name', { length: 150 }),
+    email: varchar('email', { length: 255 }).notNull(),
+    phone: varchar('phone', { length: 50 }).notNull(),
+    region: varchar('region', { length: 100 }).default('Nederland'),
+    stage: partnerCandidateStageEnum('stage').default('interested').notNull(),
+    notes: text('notes'),
+    specialties: text('specialties').array(),
+    productTypes: text('product_types').array(),
+    kvkNumber: varchar('kvk_number', { length: 50 }),
+    btwNumber: varchar('btw_number', { length: 50 }),
+    convertedPartnerId: uuid('converted_partner_id').references(() => partners.id, { onDelete: 'set null' }),
+    convertedAt: timestamp('converted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+    index('idx_partner_candidates_stage').on(table.stage),
+    index('idx_partner_candidates_email').on(table.email),
+    index('idx_partner_candidates_converted_partner').on(table.convertedPartnerId),
 ]);
 // ==========================================
 // 3. LEADS & INTAKE

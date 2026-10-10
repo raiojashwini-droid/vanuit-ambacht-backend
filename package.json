@@ -13,6 +13,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "test:auth": "tsx src/tests/auth.test.ts",
     "test:cust-part": "tsx src/tests/customers_partners.test.ts",
+    "test:partner-candidates": "tsx src/tests/partner_candidates.test.ts",
     "test:leads": "tsx src/tests/leads.test.ts",
     "test:partner-requests": "tsx src/tests/partner_requests.test.ts",
     "test:quotes": "tsx src/tests/quotes.test.ts",

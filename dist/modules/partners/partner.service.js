@@ -1,4 +1,5 @@
 import { eq, or, ilike, sql, desc, asc, and, arrayContains } from 'drizzle-orm';
+import bcryptjs from 'bcryptjs';
 import { db } from '../../db/index.js';
 import { partners, projects, partnerOffers, users } from '../../db/schema.js';
 export class PartnerError extends Error {
@@ -15,14 +16,14 @@ export class PartnerService {
     /**
      * Generates a unique sequential partner code in format PRT-XXX
      */
-    async generatePartnerCode(companyName) {
+    async generatePartnerCode(companyName, dbClient = db) {
         const cleanName = companyName
             .trim()
             .toUpperCase()
             .replace(/[^A-Z0-9]/g, '')
             .slice(0, 4);
         const prefix = cleanName ? `PRT-${cleanName}-` : 'PRT-';
-        const [latest] = await db
+        const [latest] = await dbClient
             .select({ partnerCode: partners.partnerCode })
             .from(partners)
             .where(ilike(partners.partnerCode, `${prefix}%`))
@@ -200,10 +201,10 @@ export class PartnerService {
     /**
      * Create new craftsman partner
      */
-    async create(data) {
-        const partnerCode = data.partnerCode || (await this.generatePartnerCode(data.companyName));
+    async create(data, dbClient = db) {
+        const partnerCode = data.partnerCode || (await this.generatePartnerCode(data.companyName, dbClient));
         // Check code uniqueness
-        const [existingCode] = await db
+        const [existingCode] = await dbClient
             .select({ id: partners.id })
             .from(partners)
             .where(eq(partners.partnerCode, partnerCode))
@@ -211,9 +212,40 @@ export class PartnerService {
         if (existingCode) {
             throw new PartnerError(`Partner code '${partnerCode}' is already in use`, 409, 'DUPLICATE_CODE');
         }
-        // Check userId if provided
-        if (data.userId) {
-            const [existingUser] = await db
+        let linkedUserId = data.userId || null;
+        // If password is provided, create or link user account in users table
+        if (data.password) {
+            const normalizedEmail = data.email.toLowerCase().trim();
+            const [existingUser] = await dbClient
+                .select({ id: users.id })
+                .from(users)
+                .where(eq(users.email, normalizedEmail))
+                .limit(1);
+            const passwordHash = await bcryptjs.hash(data.password, 10);
+            if (existingUser) {
+                linkedUserId = existingUser.id;
+                await dbClient
+                    .update(users)
+                    .set({ passwordHash, role: 'partner', isActive: true, updatedAt: new Date() })
+                    .where(eq(users.id, existingUser.id));
+            }
+            else {
+                const [newUser] = await dbClient
+                    .insert(users)
+                    .values({
+                    fullName: data.contactPerson.trim(),
+                    email: normalizedEmail,
+                    passwordHash,
+                    role: 'partner',
+                    phone: data.phone || null,
+                    isActive: true,
+                })
+                    .returning({ id: users.id });
+                linkedUserId = newUser.id;
+            }
+        }
+        else if (data.userId) {
+            const [existingUser] = await dbClient
                 .select({ id: users.id })
                 .from(users)
                 .where(eq(users.id, data.userId))
@@ -221,8 +253,9 @@ export class PartnerService {
             if (!existingUser) {
                 throw new PartnerError('Linked user ID does not exist', 400, 'USER_NOT_FOUND');
             }
+            linkedUserId = existingUser.id;
         }
-        const [created] = await db
+        const [created] = await dbClient
             .insert(partners)
             .values({
             partnerCode,
@@ -239,7 +272,7 @@ export class PartnerService {
             specialties: data.specialties || null,
             productTypes: data.productTypes || null,
             isActive: data.isActive ?? true,
-            userId: data.userId || null,
+            userId: linkedUserId,
         })
             .returning();
         return {
@@ -285,11 +318,51 @@ export class PartnerService {
                 throw new PartnerError(`Partner code '${data.partnerCode}' is already in use`, 409, 'DUPLICATE_CODE');
             }
         }
+        // Sync password to user account if provided
+        if (data.password) {
+            const passwordHash = await bcryptjs.hash(data.password, 10);
+            if (existing.userId) {
+                await db
+                    .update(users)
+                    .set({ passwordHash, updatedAt: new Date() })
+                    .where(eq(users.id, existing.userId));
+            }
+            else {
+                const normalizedEmail = (data.email || existing.email).toLowerCase().trim();
+                const [existingUser] = await db
+                    .select({ id: users.id })
+                    .from(users)
+                    .where(eq(users.email, normalizedEmail))
+                    .limit(1);
+                if (existingUser) {
+                    await db
+                        .update(users)
+                        .set({ passwordHash, role: 'partner', isActive: true, updatedAt: new Date() })
+                        .where(eq(users.id, existingUser.id));
+                    data.userId = existingUser.id;
+                }
+                else {
+                    const [newUser] = await db
+                        .insert(users)
+                        .values({
+                        fullName: (data.contactPerson || existing.contactPerson).trim(),
+                        email: normalizedEmail,
+                        passwordHash,
+                        role: 'partner',
+                        phone: data.phone || existing.phone || null,
+                        isActive: true,
+                    })
+                        .returning({ id: users.id });
+                    data.userId = newUser.id;
+                }
+            }
+        }
+        const { password, ...partnerUpdateFields } = data;
         const [updated] = await db
             .update(partners)
             .set({
-            ...data,
-            rating: data.rating !== undefined ? data.rating.toFixed(2) : undefined,
+            ...partnerUpdateFields,
+            rating: partnerUpdateFields.rating !== undefined ? partnerUpdateFields.rating.toFixed(2) : undefined,
             updatedAt: new Date(),
         })
             .where(eq(partners.id, id))

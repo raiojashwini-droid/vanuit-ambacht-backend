@@ -27,6 +27,7 @@ import { photoRoutes } from './modules/projects/photo.routes.js';
 import { reportsRoutes } from './modules/reports/reports.routes.js';
 import { partnerDashboardRoutes } from './modules/partner/partner-dashboard.routes.js';
 import { profileRoutes } from './modules/users/profile.routes.js';
+import { partnerCandidateRoutes } from './modules/partner-candidates/candidate.routes.js';
 
 dotenv.config();
 
@@ -75,6 +76,7 @@ server.get('/health', async () => {
 await server.register(authRoutes, { prefix: '/api/auth' });
 await server.register(customerRoutes, { prefix: '/api/customers' });
 await server.register(partnerRoutes, { prefix: '/api/partners' });
+await server.register(partnerCandidateRoutes, { prefix: '/api/partner-candidates' });
 await server.register(leadRoutes, { prefix: '/api/leads' });
 await server.register(partnerRequestRoutes, { prefix: '/api/partner-requests' });
 await server.register(documentRoutes, { prefix: '/api/documents' });
