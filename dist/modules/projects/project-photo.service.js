@@ -152,10 +152,15 @@ export class ProjectPhotoService {
             }
         }
         let finalPhotoUrl = data.photoUrl;
-        // If base64 dataUri was provided, persist to storage with photo validation
+        // If base64 dataUri was provided, also save to disk for local backup, but keep base64 dataUri in PostgreSQL for permanent access
         if (data.photoUrl.startsWith('data:image')) {
-            const saved = await storageService.saveBase64(`projects/${projectId}/photos`, `photo_${Date.now()}.png`, data.photoUrl, 'image/png', true);
-            finalPhotoUrl = saved.filePath;
+            try {
+                await storageService.saveBase64(`projects/${projectId}/photos`, `photo_${Date.now()}.png`, data.photoUrl, 'image/png', true);
+            }
+            catch (err) {
+                // Disk storage is secondary to persistent PostgreSQL storage
+            }
+            finalPhotoUrl = data.photoUrl;
         }
         const [created] = await db
             .insert(projectPhotos)
@@ -222,10 +227,13 @@ export class ProjectPhotoService {
             updateValues.visibleToCustomer = data.visibleToCustomer;
         // If replacement photo file provided (base64)
         if (data.photoUrl && data.photoUrl.startsWith('data:image')) {
-            const saved = await storageService.saveBase64(`projects/${photo.projectId}/photos`, `photo_replaced_${Date.now()}.png`, data.photoUrl, 'image/png', true);
-            updateValues.photoUrl = saved.filePath;
+            try {
+                await storageService.saveBase64(`projects/${photo.projectId}/photos`, `photo_replaced_${Date.now()}.png`, data.photoUrl, 'image/png', true);
+            }
+            catch (err) { }
+            updateValues.photoUrl = data.photoUrl;
             // Purge old local file
-            if (photo.photoUrl && !photo.photoUrl.startsWith('http')) {
+            if (photo.photoUrl && !photo.photoUrl.startsWith('http') && !photo.photoUrl.startsWith('data:image')) {
                 await storageService.deleteFile(photo.photoUrl);
             }
         }
@@ -350,6 +358,17 @@ export class ProjectPhotoService {
             },
             photos: mappedPhotos,
         };
+    }
+    /**
+     * Get single photo record by ID
+     */
+    async getPhotoById(photoId) {
+        const [photo] = await db
+            .select()
+            .from(projectPhotos)
+            .where(eq(projectPhotos.id, photoId))
+            .limit(1);
+        return photo;
     }
 }
 export const projectPhotoService = new ProjectPhotoService();

@@ -36,12 +36,13 @@ export const authRoutes = async (fastify) => {
             });
             // 4. Set HttpOnly Cookie
             setAuthCookie(reply, token);
-            // 5. Respond with user profile DTO (never sending password hash)
+            // 5. Respond with user profile DTO and token
             return reply.status(200).send({
                 success: true,
                 message: 'Authentication successful',
                 data: {
                     user,
+                    token,
                 },
             });
         }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { projectPhotoService, PhotoError } from './project-photo.service.js';
 import { updatePhotoSchema } from './project.schema.js';
+import { storageService } from '../../services/storage.service.js';
 const photoIdParamSchema = z.object({
     photoId: z.string().uuid('Invalid photo UUID'),
 });
@@ -45,6 +46,43 @@ export const photoRoutes = async (fastify) => {
                 success: false,
                 error: { code: 'INTERNAL_ERROR', message: 'Failed to retrieve photos' },
             });
+        }
+    });
+    /**
+     * GET /api/photos/:photoId/file
+     * Stream the binary image file directly for <img> tags
+     */
+    fastify.get('/:photoId/file', async (request, reply) => {
+        const paramCheck = photoIdParamSchema.safeParse(request.params);
+        if (!paramCheck.success) {
+            return reply.status(400).send({
+                success: false,
+                error: { code: 'INVALID_PARAMS', message: 'Invalid photo UUID format' },
+            });
+        }
+        try {
+            const photo = await projectPhotoService.getPhotoById(paramCheck.data.photoId);
+            if (!photo || !photo.photoUrl) {
+                return reply.status(404).send({ error: 'Photo not found' });
+            }
+            // If stored as base64 dataUri, parse and stream as binary buffer
+            if (photo.photoUrl.startsWith('data:image')) {
+                const match = photo.photoUrl.match(/^data:([^;]+);base64,(.+)$/);
+                const mime = match ? match[1] : 'image/jpeg';
+                const buffer = Buffer.from(match ? match[2] : photo.photoUrl, 'base64');
+                reply.header('Content-Type', mime);
+                reply.header('Cache-Control', 'public, max-age=86400');
+                return reply.send(buffer);
+            }
+            // If local file on disk exists, stream it
+            if (storageService.fileExists(photo.photoUrl)) {
+                reply.header('Content-Type', 'image/jpeg');
+                return reply.send(storageService.getReadStream(photo.photoUrl));
+            }
+            return reply.status(404).send({ error: 'Image file not found' });
+        }
+        catch (err) {
+            return reply.status(500).send({ error: 'Failed to stream photo' });
         }
     });
     /**

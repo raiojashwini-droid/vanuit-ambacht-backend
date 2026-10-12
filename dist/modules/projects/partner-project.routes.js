@@ -92,7 +92,10 @@ export const partnerProjectRoutes = async (fastify) => {
         try {
             const created = await projectPhotoService.uploadPhoto(paramCheck.data.id, {
                 photoUrl: bodyCheck.data.photoUrl,
-                caption: bodyCheck.data.caption,
+                title: bodyCheck.data.title || null,
+                phase: bodyCheck.data.phase || null,
+                craftsman: bodyCheck.data.craftsman || request.user.fullName || 'Sven Hoek',
+                caption: bodyCheck.data.caption || null,
                 tag: bodyCheck.data.tag || 'workshop',
                 visibleToCustomer: bodyCheck.data.visibleToCustomer ?? true,
             }, request.user);
