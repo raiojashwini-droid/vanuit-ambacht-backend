@@ -138,12 +138,11 @@ export const authPlugin = fp(authPluginAsync, {
  * Cookie Helper: Sets the secure HttpOnly cookie for session management.
  */
 export function setAuthCookie(reply, token) {
-    const isProduction = process.env.NODE_ENV === 'production';
     reply.setCookie(AUTH_COOKIE_NAME, token, {
         path: '/',
         httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'strict' : 'lax',
+        secure: true,
+        sameSite: 'none',
         maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
     });
 }
@@ -151,11 +150,10 @@ export function setAuthCookie(reply, token) {
  * Cookie Helper: Clears the authentication cookie upon logout.
  */
 export function clearAuthCookie(reply) {
-    const isProduction = process.env.NODE_ENV === 'production';
     reply.clearCookie(AUTH_COOKIE_NAME, {
         path: '/',
         httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'strict' : 'lax',
+        secure: true,
+        sameSite: 'none',
     });
 }
