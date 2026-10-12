@@ -120,7 +120,7 @@ export const partnerProjectRoutes: FastifyPluginAsync = async (fastify) => {
             photoUrl: bodyCheck.data.photoUrl,
             title: bodyCheck.data.title || null,
             phase: bodyCheck.data.phase || null,
-            craftsman: bodyCheck.data.craftsman || (request.user.name || 'Sven Hoek'),
+            craftsman: bodyCheck.data.craftsman || request.user.fullName || 'Sven Hoek',
             caption: bodyCheck.data.caption || null,
             tag: bodyCheck.data.tag || 'workshop',
             visibleToCustomer: bodyCheck.data.visibleToCustomer ?? true,
