@@ -71,7 +71,7 @@ export class PlanningService {
       .values({
         eventNumber,
         projectId: data.projectId || null,
-        partnerId: data.partnerId || null,
+        partnerId: data.partnerId || (user.role === 'partner' && user.profileId ? user.profileId : null),
         milestoneId: data.milestoneId || null,
         createdByUserId: user.sub,
         eventType: data.eventType,

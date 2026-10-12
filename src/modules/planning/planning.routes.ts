@@ -73,7 +73,12 @@ export const planningRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const created = await planningService.createEvent(parsed.data, request.user);
+      const partnerIdToSet = parsed.data.partnerId || (request.user.role === 'partner' ? ((request as any).effectiveProfileId || request.user.profileId) : null);
+
+      const created = await planningService.createEvent({
+        ...parsed.data,
+        partnerId: partnerIdToSet,
+      }, request.user);
       return reply.status(201).send({
         success: true,
         data: created,
