@@ -296,6 +296,7 @@ export class QuoteService {
       diagramConfig: v.diagramConfig,
       specificationsOverview: v.specificationsOverview,
       letterConfig: v.letterConfig,
+      optionsConfig: (v as any).optionsConfig,
       status: v.status,
       digitalSignature: v.digitalSignature,
       approvedAt: v.approvedAt ? new Date(v.approvedAt).toISOString() : null,
@@ -618,6 +619,7 @@ export class QuoteService {
             labels: ['Bij akkoord', 'Bij levering'],
             subtexts: ['Na akkoord op de technische tekening', 'Pas als alles naar wens is opgeleverd'],
           },
+          optionsConfig: null,
           status: 'draft',
         })
         .returning();
@@ -806,6 +808,7 @@ export class QuoteService {
         diagramConfig: input.diagramConfig !== undefined ? input.diagramConfig : currentVersion?.diagramConfig,
         specificationsOverview: input.specificationsOverview !== undefined ? input.specificationsOverview : currentVersion?.specificationsOverview,
         letterConfig: input.letterConfig !== undefined ? input.letterConfig : currentVersion?.letterConfig,
+        optionsConfig: input.optionsConfig !== undefined ? input.optionsConfig : (currentVersion as any)?.optionsConfig,
       };
 
       await tx.update(quoteVersions).set(updateVersionData).where(eq(quoteVersions.id, targetVersionId!));
@@ -969,6 +972,7 @@ export class QuoteService {
           diagramConfig: currentV.diagramConfig,
           specificationsOverview: currentV.specificationsOverview,
           letterConfig: currentV.letterConfig,
+          optionsConfig: (currentV as any).optionsConfig,
           status: 'draft',
         })
         .returning();
@@ -1486,6 +1490,7 @@ export class QuoteService {
         deliverySubtext: v.deliverySubtext || 'na technisch akkoord',
         specifications: (v.specificationsOverview as any) || [],
         diagram: v.diagramConfig as any,
+        options: (v as any).optionsConfig || null,
       },
       investment: {
         lineItems,

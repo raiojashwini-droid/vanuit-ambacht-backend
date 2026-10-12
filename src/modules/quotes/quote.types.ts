@@ -124,6 +124,7 @@ export interface QuoteVersionDto {
   diagramConfig?: DiagramConfig | null;
   specificationsOverview?: SpecificationSection[] | null;
   letterConfig?: LetterConfig | null;
+  optionsConfig?: Record<string, any> | null;
   status: QuoteVersionStatus;
   digitalSignature?: DigitalSignatureDto | null;
   approvedAt?: string | null;
@@ -189,6 +190,7 @@ export interface PublicOfferteDto {
     deliverySubtext: string;
     specifications: SpecificationSection[];
     diagram?: DiagramConfig | null;
+    options?: Record<string, any> | null;
   };
   investment: {
     lineItems: Array<{

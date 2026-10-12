@@ -35,6 +35,7 @@ const server = Fastify({
   logger: {
     level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
   },
+  bodyLimit: 15 * 1024 * 1024, // 15MB to allow base64 images and documents
 });
 
 // Configure CORS with credentials support for HttpOnly cookies
