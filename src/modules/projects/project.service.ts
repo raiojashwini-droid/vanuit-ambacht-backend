@@ -770,8 +770,11 @@ export class ProjectService {
       updatedAt: new Date(),
     };
 
-    if (input.status) updateValues.status = input.status;
-    else if (nextStep === maxSteps) updateValues.status = 'completed';
+    if (input.status) {
+      updateValues.status = input.status;
+    } else if (input.orderStatus === 'voltooid' || nextStep === maxSteps) {
+      updateValues.status = 'completed';
+    }
 
     if (input.orderStatus) updateValues.orderStatus = input.orderStatus;
 
