@@ -41,8 +41,8 @@ async function clean() {
   await sql.unsafe("DELETE FROM partners WHERE email NOT IN ('partner@vanuitambacht.nl')");
   console.log('✓ Cleaned test partners');
 
-  // 8. Delete test users (keep admin, partner, customer seeds)
-  await sql.unsafe("DELETE FROM users WHERE email NOT IN ('admin@vanuitambacht.nl', 'partner@vanuitambacht.nl', 'customer@vanuitambacht.nl')");
+  // 8. Delete test users (keep admin, partner, customer seeds, and Tim & Bram)
+  await sql.unsafe("DELETE FROM users WHERE email NOT IN ('admin@vanuitambacht.nl', 'partner@vanuitambacht.nl', 'customer@vanuitambacht.nl', 'tim@vanuitambacht.nl', 'bram@vanuitambacht.nl')");
   console.log('✓ Cleaned test users');
 
   // 9. Delete test customers created during quote testing

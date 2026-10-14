@@ -27,6 +27,8 @@ export const createLeadSchema = z.object({
   status: z.enum(leadStatusEnumValues).default('new'),
   workflowStep: z.coerce.number().int().min(1).max(8).default(1),
   assignedToUserId: z.string().uuid().optional(),
+  assignee: z.string().trim().max(100).optional(),
+  assignedTo: z.string().trim().max(100).optional(),
   notes: z.string().nullable().optional(),
 });
 
