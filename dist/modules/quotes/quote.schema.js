@@ -52,10 +52,10 @@ export const letterConfigSchema = z.object({
         desc: z.string().trim(),
     })).optional(),
     processSteps: z.array(z.object({
-        step: z.string(),
-        title: z.string().trim(),
-        desc: z.string().trim(),
-        badge: z.string().optional(),
+        step: z.union([z.string(), z.number()]).transform(v => String(v)).default('1'),
+        title: z.string().trim().default('Stap'),
+        desc: z.string().trim().default(''),
+        badge: z.string().optional().default(''),
     })).optional(),
     approvalTitle: z.string().trim().optional(),
     approvalSubheading: z.string().trim().optional(),
@@ -103,6 +103,7 @@ export const saveDraftVersionSchema = z.object({
     diagramConfig: diagramConfigSchema,
     specificationsOverview: z.array(specificationSectionSchema).optional().nullable(),
     letterConfig: letterConfigSchema,
+    optionsConfig: z.record(z.any()).optional().nullable(),
 });
 export const publishQuoteSchema = z.object({
     sendEmail: z.boolean().default(false),

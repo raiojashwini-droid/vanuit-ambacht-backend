@@ -58,7 +58,11 @@ export const planningRoutes = async (fastify) => {
                 error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message, issues: parsed.error.issues },
             });
         }
-        const created = await planningService.createEvent(parsed.data, request.user);
+        const partnerIdToSet = parsed.data.partnerId || (request.user.role === 'partner' ? (request.effectiveProfileId || request.user.profileId) : null);
+        const created = await planningService.createEvent({
+            ...parsed.data,
+            partnerId: partnerIdToSet,
+        }, request.user);
         return reply.status(201).send({
             success: true,
             data: created,

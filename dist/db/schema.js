@@ -254,6 +254,7 @@ export const quoteVersions = pgTable('quote_versions', {
     diagramConfig: jsonb('diagram_config'),
     specificationsOverview: jsonb('specifications_overview'),
     letterConfig: jsonb('letter_config'),
+    optionsConfig: jsonb('options_config'),
     status: quoteVersionStatusEnum('status').default('draft').notNull(),
     digitalSignature: jsonb('digital_signature'),
     approvedAt: timestamp('approved_at', { withTimezone: true }),

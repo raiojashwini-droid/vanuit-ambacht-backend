@@ -226,6 +226,7 @@ export class QuoteService {
             diagramConfig: v.diagramConfig,
             specificationsOverview: v.specificationsOverview,
             letterConfig: v.letterConfig,
+            optionsConfig: v.optionsConfig,
             status: v.status,
             digitalSignature: v.digitalSignature,
             approvedAt: v.approvedAt ? new Date(v.approvedAt).toISOString() : null,
@@ -511,6 +512,7 @@ export class QuoteService {
                     labels: ['Bij akkoord', 'Bij levering'],
                     subtexts: ['Na akkoord op de technische tekening', 'Pas als alles naar wens is opgeleverd'],
                 },
+                optionsConfig: null,
                 status: 'draft',
             })
                 .returning();
@@ -686,6 +688,7 @@ export class QuoteService {
                 diagramConfig: input.diagramConfig !== undefined ? input.diagramConfig : currentVersion?.diagramConfig,
                 specificationsOverview: input.specificationsOverview !== undefined ? input.specificationsOverview : currentVersion?.specificationsOverview,
                 letterConfig: input.letterConfig !== undefined ? input.letterConfig : currentVersion?.letterConfig,
+                optionsConfig: input.optionsConfig !== undefined ? input.optionsConfig : currentVersion?.optionsConfig,
             };
             await tx.update(quoteVersions).set(updateVersionData).where(eq(quoteVersions.id, targetVersionId));
             // Replace line items only if provided, or if new draft was cloned
@@ -831,6 +834,7 @@ export class QuoteService {
                 diagramConfig: currentV.diagramConfig,
                 specificationsOverview: currentV.specificationsOverview,
                 letterConfig: currentV.letterConfig,
+                optionsConfig: currentV.optionsConfig,
                 status: 'draft',
             })
                 .returning();
@@ -1295,6 +1299,7 @@ export class QuoteService {
                 deliverySubtext: v.deliverySubtext || 'na technisch akkoord',
                 specifications: v.specificationsOverview || [],
                 diagram: v.diagramConfig,
+                options: v.optionsConfig || null,
             },
             investment: {
                 lineItems,
