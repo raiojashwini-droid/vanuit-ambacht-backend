@@ -509,6 +509,33 @@ export class ProjectService {
     },
     user: JwtTokenPayload
   ): Promise<ProjectDto> {
+    // Verify customer exists to avoid raw foreign key constraint crashes
+    const [existingCustomer] = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.id, data.customerId))
+      .limit(1);
+
+    if (!existingCustomer) {
+      throw new ProjectError(
+        `Klant met ID ${data.customerId} bestaat niet in de database. Selecteer een geldige klant.`,
+        400,
+        'CUSTOMER_NOT_FOUND'
+      );
+    }
+
+    // Verify partner exists if supplied
+    if (data.partnerId) {
+      const [existingPartner] = await db
+        .select({ id: partners.id })
+        .from(partners)
+        .where(eq(partners.id, data.partnerId))
+        .limit(1);
+      if (!existingPartner) {
+        data.partnerId = null;
+      }
+    }
+
     const projectNumber = await this.generateProjectNumber();
 
     const maxSteps = data.projectType === 'garden_room' ? 7 : 5;
