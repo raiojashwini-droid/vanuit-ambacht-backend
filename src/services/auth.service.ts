@@ -145,6 +145,8 @@ export class AuthService {
       role: userRecord.role as UserRole,
       fullName: userRecord.fullName,
       phone: userRecord.phone,
+      language: userRecord.language,
+      timezone: userRecord.timezone,
       isActive: userRecord.isActive,
       profileId,
       partnerCode,

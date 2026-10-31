@@ -19,6 +19,7 @@ export interface LeadListItem {
   workflowStep: number;
   assignedToUserId: string;
   assignedToName?: string;
+  assignedTo?: string;
   lostReason: string | null;
   notes?: string | null;
   intakeNotes?: string | null;

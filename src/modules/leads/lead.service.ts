@@ -184,6 +184,7 @@ export class LeadService {
       workflowStep: r.lead.workflowStep,
       assignedToUserId: r.lead.assignedToUserId,
       assignedToName: r.assignedUser?.fullName,
+      assignedTo: r.assignedUser?.fullName,
       lostReason: r.lead.lostReason,
       notes: r.intakeNote || null,
       intakeNotes: r.intakeNote || null,
@@ -327,6 +328,7 @@ export class LeadService {
       workflowStep: leadRow.lead.workflowStep,
       assignedToUserId: leadRow.lead.assignedToUserId,
       assignedToName: leadRow.assignedUser?.fullName,
+      assignedTo: leadRow.assignedUser?.fullName,
       lostReason: leadRow.lead.lostReason,
       notes: intakeNote,
       intakeNotes: intakeNote,
@@ -339,11 +341,61 @@ export class LeadService {
   }
 
   /**
+   * Helper to resolve assignee UUID from either explicit UUID or name (e.g. 'Tim' | 'Bram')
+   */
+  private async resolveAssigneeUserId(
+    assignedToUserId?: string,
+    assigneeName?: string,
+    fallbackUserId?: string
+  ): Promise<string> {
+    if (assignedToUserId) {
+      const [u] = await db.select({ id: users.id }).from(users).where(eq(users.id, assignedToUserId)).limit(1);
+      if (u) return u.id;
+    }
+
+    const name = (assigneeName || '').trim();
+    if (name) {
+      const lower = name.toLowerCase();
+      const adminUsers = await db
+        .select({ id: users.id, fullName: users.fullName, email: users.email })
+        .from(users)
+        .where(eq(users.role, 'admin'));
+
+      if (lower.includes('bram') && !lower.includes('tim')) {
+        const bram = adminUsers.find(
+          u => u.fullName.toLowerCase().includes('bram') && !u.fullName.toLowerCase().includes('tim')
+        );
+        if (bram) return bram.id;
+      } else if (lower.includes('tim')) {
+        const tim = adminUsers.find(
+          u => u.fullName.toLowerCase().includes('tim') && !u.fullName.toLowerCase().includes('bram')
+        );
+        if (tim) return tim.id;
+      }
+    }
+
+    if (fallbackUserId) return fallbackUserId;
+
+    // Default to Tim admin if available, or first admin user
+    const [tim] = await db.select({ id: users.id }).from(users).where(eq(users.email, 'tim@vanuitambacht.nl')).limit(1);
+    if (tim) return tim.id;
+
+    const [firstAdmin] = await db.select({ id: users.id }).from(users).where(eq(users.role, 'admin')).limit(1);
+    return firstAdmin?.id || '';
+  }
+
+  /**
    * Create new lead with optional initial note
    */
   async create(data: CreateLeadInput, currentUserId: string): Promise<LeadListItem> {
     const leadNumber = await this.generateLeadNumber();
-    const assignedUserId = data.assignedToUserId || currentUserId;
+    const { notes, assignee, assignedTo, ...createFields } = data;
+
+    const assignedUserId = await this.resolveAssigneeUserId(
+      createFields.assignedToUserId,
+      assignee || assignedTo,
+      currentUserId
+    );
 
     // Verify assigned user exists
     const [assignedUser] = await db
@@ -360,27 +412,27 @@ export class LeadService {
       .insert(leads)
       .values({
         leadNumber,
-        name: data.name,
-        email: data.email?.toLowerCase() || null,
-        phone: data.phone || null,
-        address: data.address || null,
-        city: data.city || null,
-        productType: data.productType,
-        dimensionsInquiry: data.dimensionsInquiry || null,
-        source: data.source || 'Direct',
-        status: data.status || 'new',
-        workflowStep: data.workflowStep || 1,
+        name: createFields.name,
+        email: createFields.email?.toLowerCase() || null,
+        phone: createFields.phone || null,
+        address: createFields.address || null,
+        city: createFields.city || null,
+        productType: createFields.productType,
+        dimensionsInquiry: createFields.dimensionsInquiry || null,
+        source: createFields.source || 'Direct',
+        status: createFields.status || 'new',
+        workflowStep: createFields.workflowStep || 1,
         assignedToUserId: assignedUserId,
       })
       .returning();
 
     // If initial notes provided, create first commercial action
-    if (data.notes) {
+    if (notes) {
       await db.insert(commercialActions).values({
         leadId: created.id,
         createdByUserId: currentUserId,
         actionType: 'intake_note',
-        note: data.notes,
+        note: notes,
       });
     }
 
@@ -400,9 +452,10 @@ export class LeadService {
       workflowStep: created.workflowStep,
       assignedToUserId: created.assignedToUserId,
       assignedToName: assignedUser.fullName,
+      assignedTo: assignedUser.fullName,
       lostReason: created.lostReason,
-      notes: data.notes || null,
-      intakeNotes: data.notes || null,
+      notes: notes || null,
+      intakeNotes: notes || null,
       createdAt: created.createdAt.toISOString(),
       updatedAt: created.updatedAt.toISOString(),
     };
@@ -417,12 +470,18 @@ export class LeadService {
       throw new LeadError('Lead not found', 404, 'LEAD_NOT_FOUND');
     }
 
-    if (data.assignedToUserId) {
-      const [u] = await db.select({ id: users.id }).from(users).where(eq(users.id, data.assignedToUserId)).limit(1);
-      if (!u) throw new LeadError('Assigned user does not exist', 400, 'USER_NOT_FOUND');
-    }
+    const { notes: updatedNotes, assignee, assignedTo, ...leadFields } = data;
 
-    const { notes: updatedNotes, ...leadFields } = data;
+    if (data.assignedToUserId || assignee || assignedTo) {
+      const assignedUserId = await this.resolveAssigneeUserId(
+        data.assignedToUserId,
+        assignee || assignedTo,
+        existing.assignedToUserId
+      );
+      const [u] = await db.select({ id: users.id }).from(users).where(eq(users.id, assignedUserId)).limit(1);
+      if (!u) throw new LeadError('Assigned user does not exist', 400, 'USER_NOT_FOUND');
+      leadFields.assignedToUserId = assignedUserId;
+    }
 
     if (updatedNotes !== undefined) {
       const [existingNote] = await db
@@ -489,6 +548,7 @@ export class LeadService {
       workflowStep: updated.workflowStep,
       assignedToUserId: updated.assignedToUserId,
       assignedToName: assignedUser?.fullName,
+      assignedTo: assignedUser?.fullName,
       lostReason: updated.lostReason,
       notes: intakeAction?.note || null,
       intakeNotes: intakeAction?.note || null,

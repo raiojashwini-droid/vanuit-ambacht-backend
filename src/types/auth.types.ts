@@ -28,6 +28,8 @@ export interface AuthUserSummary {
   role: UserRole;
   fullName: string;
   phone?: string | null;
+  language?: string | null;
+  timezone?: string | null;
   isActive: boolean;
   profileId?: string | null;
   partnerCode?: string | null;

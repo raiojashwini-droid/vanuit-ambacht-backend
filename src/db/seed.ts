@@ -42,6 +42,49 @@ async function seed() {
     .returning();
   console.log(`✅ Admin user seeded: ${adminUser.email} (ID: ${adminUser.id})`);
 
+  // 2b. Upsert Tim & Bram Admin Co-founders
+  let [timUser] = await db
+    .insert(users)
+    .values({
+      email: 'tim@vanuitambacht.nl',
+      passwordHash: adminHash,
+      role: 'admin',
+      fullName: 'Tim',
+      phone: '+31 6 11112222',
+      isActive: true,
+    })
+    .onConflictDoUpdate({
+      target: users.email,
+      set: {
+        passwordHash: adminHash,
+        fullName: 'Tim',
+        isActive: true,
+      },
+    })
+    .returning();
+  console.log(`✅ Tim admin seeded: ${timUser.email} (ID: ${timUser.id})`);
+
+  let [bramUser] = await db
+    .insert(users)
+    .values({
+      email: 'bram@vanuitambacht.nl',
+      passwordHash: adminHash,
+      role: 'admin',
+      fullName: 'Bram',
+      phone: '+31 6 11113333',
+      isActive: true,
+    })
+    .onConflictDoUpdate({
+      target: users.email,
+      set: {
+        passwordHash: adminHash,
+        fullName: 'Bram',
+        isActive: true,
+      },
+    })
+    .returning();
+  console.log(`✅ Bram admin seeded: ${bramUser.email} (ID: ${bramUser.id})`);
+
   // 3. Upsert Partner User
   let [partnerUser] = await db
     .insert(users)
