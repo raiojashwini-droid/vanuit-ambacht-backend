@@ -73,47 +73,22 @@ async function runTests() {
   const partnerMe = partnerLoginRes.json().data.user;
   const customerMe = customerLoginRes.json().data.user;
 
-  // Retrieve or create a project linked to the seeded customer and partner
-  let [testProject] = await db
-    .select({
-      id: projects.id,
-      name: projects.name,
-      projectNumber: projects.projectNumber,
-      customerId: projects.customerId,
-      partnerId: projects.partnerId,
-    })
-    .from(projects)
-    .limit(1);
-
-  if (!testProject) {
-    // Fallback: fetch customer and partner records
-    const [cRow] = await db.select().from(customers).where(eq(customers.userId, customerMe.id)).limit(1);
-    const [pRow] = await db.select().from(partners).where(eq(partners.userId, partnerMe.id)).limit(1);
-
-    const [createdProj] = await db
-      .insert(projects)
-      .values({
-        projectNumber: `PRJ-TEST-${Date.now().toString().slice(-4)}`,
-        name: 'Buitenkeuken Thermo Fraké 240',
-        projectType: 'outdoor_kitchen',
-        customerId: cRow.id,
-        partnerId: pRow.id,
-        deliveryAddress: 'Herengracht 101',
-        city: 'Amsterdam',
-      })
-      .returning();
-    testProject = createdProj;
-  }
-
-  // Ensure testProject has customer and partner pointing to seeded users
+  // Create a clean dedicated project linked to the seeded customer and partner
   const [cRow] = await db.select().from(customers).where(eq(customers.userId, customerMe.id)).limit(1);
   const [pRow] = await db.select().from(partners).where(eq(partners.userId, partnerMe.id)).limit(1);
-  if (cRow && pRow) {
-    await db
-      .update(projects)
-      .set({ customerId: cRow.id, partnerId: pRow.id })
-      .where(eq(projects.id, testProject.id));
-  }
+
+  const [testProject] = await db
+    .insert(projects)
+    .values({
+      projectNumber: `PRJ-CONV-${Date.now().toString().slice(-6)}`,
+      name: 'Conversations Dedicated QA Test Project',
+      projectType: 'outdoor_kitchen',
+      customerId: cRow ? cRow.id : null,
+      partnerId: pRow ? pRow.id : null,
+      deliveryAddress: 'Herengracht 101',
+      city: 'Amsterdam',
+    })
+    .returning();
 
   // --- SECTION 1: AUTHENTICATION & ACCESS GUARDS ---
   console.log('\n--- 1. Authentication & Access Guards ---');

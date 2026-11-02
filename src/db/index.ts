@@ -33,7 +33,8 @@ function getDbOptions() {
 export const sqlClient = postgres({
   ...getDbOptions(),
   max: 10,
-  idle_timeout: 0, // Keep pool connections alive permanently
+  idle_timeout: 10, // Reconnect fresh before proxy drops idle sockets
+  max_lifetime: 60 * 10,
   connect_timeout: 30,
 });
 
