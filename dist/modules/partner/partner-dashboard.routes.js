@@ -130,12 +130,19 @@ export const partnerDashboardRoutes = async (fastify) => {
                 else
                     dbStatus = 'in_progress';
             }
-            const updated = await db
-                .update(projects)
-                .set({
+            const updateData = {
                 status: dbStatus,
                 updatedAt: new Date(),
-            })
+            };
+            if (bodyCheck.data.progress !== undefined) {
+                updateData.progressPercentage = Number(bodyCheck.data.progress);
+            }
+            else if (dbStatus === 'completed') {
+                updateData.progressPercentage = 100;
+            }
+            const updated = await db
+                .update(projects)
+                .set(updateData)
                 .where(eq(projects.id, projectId))
                 .returning({
                 id: projects.id,

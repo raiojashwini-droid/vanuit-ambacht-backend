@@ -629,10 +629,12 @@ export class ProjectService {
             progressPercentage: progress,
             updatedAt: new Date(),
         };
-        if (input.status)
+        if (input.status) {
             updateValues.status = input.status;
-        else if (nextStep === maxSteps)
+        }
+        else if (input.orderStatus === 'voltooid' || nextStep === maxSteps) {
             updateValues.status = 'completed';
+        }
         if (input.orderStatus)
             updateValues.orderStatus = input.orderStatus;
         // Update specs
