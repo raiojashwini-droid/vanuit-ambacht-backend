@@ -83,7 +83,7 @@ async function runTests() {
       projectNumber: `PRJ-CONV-${Date.now().toString().slice(-6)}`,
       name: 'Conversations Dedicated QA Test Project',
       projectType: 'outdoor_kitchen',
-      customerId: cRow ? cRow.id : null,
+      customerId: cRow!.id,
       partnerId: pRow ? pRow.id : null,
       deliveryAddress: 'Herengracht 101',
       city: 'Amsterdam',
