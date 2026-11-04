@@ -4,7 +4,7 @@ import { projects, planningEvents, partners } from '../../db/schema.js';
 import { eq, and, gte, desc } from 'drizzle-orm';
 const updateProgressSchema = z.object({
     progress: z.number().int().min(0).max(100).optional(),
-    status: z.enum(['In Progress', 'Review Required', 'Completed', 'in_progress', 'completed', 'pending']).optional(),
+    status: z.string().optional(),
 });
 const projectIdParamSchema = z.object({
     id: z.string().uuid('Invalid project UUID'),
@@ -121,24 +121,26 @@ export const partnerDashboardRoutes = async (fastify) => {
             }
             // Map status
             let dbStatus = existingProject[0].status;
-            if (bodyCheck.data.status) {
-                const s = bodyCheck.data.status.toLowerCase();
-                if (s.includes('completed'))
-                    dbStatus = 'completed';
-                else if (s.includes('progress'))
-                    dbStatus = 'in_progress';
-                else
-                    dbStatus = 'in_progress';
-            }
+            const s = (bodyCheck.data.status || '').toLowerCase();
+            if (s.includes('completed'))
+                dbStatus = 'completed';
+            else if (s.includes('progress') || s.includes('ready') || s.includes('levering') || s.includes('review'))
+                dbStatus = 'in_progress';
             const updateData = {
                 status: dbStatus,
                 updatedAt: new Date(),
             };
+            if (s.includes('ready') || s.includes('levering') || s.includes('delivery')) {
+                updateData.orderStatus = 'klaar_voor_levering';
+            }
             if (bodyCheck.data.progress !== undefined) {
                 updateData.progressPercentage = Number(bodyCheck.data.progress);
             }
             else if (dbStatus === 'completed') {
                 updateData.progressPercentage = 100;
+            }
+            else if (s.includes('ready') || s.includes('levering') || s.includes('delivery')) {
+                updateData.progressPercentage = 75;
             }
             const updated = await db
                 .update(projects)
