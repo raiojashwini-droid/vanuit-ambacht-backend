@@ -308,8 +308,10 @@ export const invoiceRoutes = async (fastify) => {
         if (!targetId) {
             return reply.send({ success: true, message: `Factuur ${paramCheck.data.id} succesvol verwijderd!` });
         }
+        const query = request.query || {};
+        const force = query.force === 'true' || query.force === true;
         try {
-            const result = await invoiceService.delete(targetId, request.user);
+            const result = await invoiceService.delete(targetId, request.user, force);
             return reply.send({ success: true, message: result.message });
         }
         catch (err) {

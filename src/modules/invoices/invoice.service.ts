@@ -665,7 +665,7 @@ export class InvoiceService {
    * DELETE /api/invoices/:id
    * Delete invoice (Admin only, allowed ONLY in draft status with no payments)
    */
-  async delete(id: string, user: JwtTokenPayload): Promise<{ success: boolean; message: string }> {
+  async delete(id: string, user: JwtTokenPayload, force = false): Promise<{ success: boolean; message: string }> {
     if (user.role !== 'admin') {
       throw new InvoiceError('Only administrators can delete invoices', 403, 'FORBIDDEN');
     }
@@ -680,7 +680,7 @@ export class InvoiceService {
       throw new InvoiceError('Invoice not found', 404, 'NOT_FOUND');
     }
 
-    if (existing.status !== 'draft') {
+    if (!force && existing.status !== 'draft') {
       throw new InvoiceError(
         'Belastingdienst compliance: Finalized or sent invoices cannot be deleted. Issue a credit note instead.',
         400,
@@ -689,20 +689,23 @@ export class InvoiceService {
     }
 
     // Check payments
-    const [payCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(payments)
-      .where(eq(payments.invoiceId, id));
+    if (!force) {
+      const [payCount] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(payments)
+        .where(eq(payments.invoiceId, id));
 
-    if (payCount && payCount.count > 0) {
-      throw new InvoiceError(
-        'Cannot delete invoice with existing payment records.',
-        400,
-        'INVOICE_HAS_PAYMENTS'
-      );
+      if (payCount && payCount.count > 0) {
+        throw new InvoiceError(
+          'Cannot delete invoice with existing payment records.',
+          400,
+          'INVOICE_HAS_PAYMENTS'
+        );
+      }
     }
 
     await db.transaction(async (tx) => {
+      await tx.delete(payments).where(eq(payments.invoiceId, id));
       await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, id));
       await tx.delete(invoices).where(eq(invoices.id, id));
     });
