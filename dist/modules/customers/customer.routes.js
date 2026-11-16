@@ -83,7 +83,29 @@ export const customerRoutes = async (fastify) => {
      * Create new customer (Admin only)
      */
     fastify.post('/', { preHandler: [fastify.authenticate, fastify.authorize(['admin'])] }, async (request, reply) => {
-        const parseResult = createCustomerSchema.safeParse(request.body);
+        const rawBody = request.body || {};
+        // Auto-extract firstName and lastName from name / fullName if missing
+        if ((!rawBody.firstName || !rawBody.lastName) && (rawBody.name || rawBody.fullName)) {
+            const full = String(rawBody.name || rawBody.fullName).trim();
+            const parts = full.split(/\s+/);
+            if (!rawBody.firstName)
+                rawBody.firstName = parts[0] || 'Klant';
+            if (!rawBody.lastName)
+                rawBody.lastName = parts.slice(1).join(' ') || 'Ambacht';
+        }
+        if (!rawBody.firstName && rawBody.lastName) {
+            rawBody.firstName = 'Klant';
+        }
+        else if (rawBody.firstName && !rawBody.lastName) {
+            rawBody.lastName = 'Ambacht';
+        }
+        if (!rawBody.city && (rawBody.address || rawBody.streetAddress)) {
+            rawBody.city = String(rawBody.address || rawBody.streetAddress).split(',')[0].trim();
+        }
+        if (!rawBody.phone) {
+            rawBody.phone = '+31 6 12345678';
+        }
+        const parseResult = createCustomerSchema.safeParse(rawBody);
         if (!parseResult.success) {
             return reply.status(400).send({
                 success: false,

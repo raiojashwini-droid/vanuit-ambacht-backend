@@ -1,4 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { db } from '../../db/index.js';
+import { projects } from '../../db/schema.js';
+import { eq, ilike, desc } from 'drizzle-orm';
 import { invoiceService, InvoiceError } from './invoice.service.js';
 import { invoicePdfService } from './invoice-pdf.service.js';
 import {
@@ -86,7 +89,104 @@ export const invoiceRoutes: FastifyPluginAsync = async (fastify) => {
     '/',
     { preHandler: [fastify.authenticate, fastify.authorize(['admin'])] },
     async (request, reply) => {
-      const bodyCheck = createInvoiceSchema.safeParse(request.body);
+      const rawBody = (request.body as any) || {};
+
+      // 1. Auto-resolve projectId if missing
+      if (!rawBody.projectId) {
+        if (rawBody.customerId) {
+          const [found] = await db
+            .select({ id: projects.id, customerId: projects.customerId })
+            .from(projects)
+            .where(eq(projects.customerId, rawBody.customerId))
+            .limit(1);
+          if (found) {
+            rawBody.projectId = found.id;
+          }
+        }
+        if (!rawBody.projectId && rawBody.customerName) {
+          const [found] = await db
+            .select({ id: projects.id, customerId: projects.customerId })
+            .from(projects)
+            .where(ilike(projects.name, `%${rawBody.customerName}%`))
+            .limit(1);
+          if (found) {
+            rawBody.projectId = found.id;
+            if (!rawBody.customerId) rawBody.customerId = found.customerId;
+          }
+        }
+        if (!rawBody.projectId) {
+          const [anyProject] = await db
+            .select({ id: projects.id, customerId: projects.customerId })
+            .from(projects)
+            .orderBy(desc(projects.createdAt))
+            .limit(1);
+          if (anyProject) {
+            rawBody.projectId = anyProject.id;
+            if (!rawBody.customerId) rawBody.customerId = anyProject.customerId;
+          }
+        }
+      }
+
+      // 2. Normalize items
+      if (Array.isArray(rawBody.items) && rawBody.items.length > 0) {
+        rawBody.items = rawBody.items.map((it: any, idx: number) => {
+          const pos = it.position || idx + 1;
+          const isInc = it.isIncluded === true || String(it.price).toLowerCase().includes('inbegrepen');
+          let num = typeof it.unitPriceInclVat === 'number'
+            ? it.unitPriceInclVat
+            : (typeof it.unitPriceExclVat === 'number'
+              ? it.unitPriceExclVat * 1.21
+              : (typeof it.price === 'number'
+                ? it.price
+                : parseFloat(String(it.price || '').replace(/[^\d.-]/g, '')) || 0));
+          if (isInc) num = 0;
+          return {
+            position: pos,
+            description: it.description || 'Factuurregel',
+            subtext: it.subtext || null,
+            quantity: typeof it.quantity === 'number' ? it.quantity : (parseFloat(it.quantity) || 1),
+            unitPriceInclVat: num,
+            unitPriceExclVat: it.unitPriceExclVat !== undefined ? it.unitPriceExclVat : Math.round((num / 1.21) * 100) / 100,
+            vatRate: it.vatRate !== undefined ? it.vatRate : 21.00,
+            isIncluded: isInc,
+          };
+        });
+      } else {
+        const total = typeof rawBody.totalAmount === 'number'
+          ? rawBody.totalAmount
+          : parseFloat(String(rawBody.totalAmount || '').replace(/[^\d.-]/g, '')) || 1000;
+        rawBody.items = [
+          {
+            position: 1,
+            description: rawBody.notes || `Factuur ${rawBody.customerName || 'Klant'}`,
+            subtext: null,
+            quantity: 1,
+            unitPriceInclVat: total,
+            unitPriceExclVat: Math.round((total / 1.21) * 100) / 100,
+            vatRate: 21.00,
+            isIncluded: false,
+          },
+        ];
+      }
+
+      // 3. Normalize invoiceType
+      if (rawBody.invoiceType) {
+        const t = String(rawBody.invoiceType).toLowerCase();
+        if (t.includes('aanbetaling') || t.includes('down_payment')) rawBody.invoiceType = 'down_payment_upfront';
+        else if (t.includes('eindfactuur') || t.includes('completion')) rawBody.invoiceType = 'final_completion';
+        else if (t.includes('termijn') || t.includes('interim')) rawBody.invoiceType = 'interim_progress';
+        else rawBody.invoiceType = 'full_amount';
+      }
+
+      // 4. Normalize status
+      if (rawBody.status) {
+        const s = String(rawBody.status).toLowerCase();
+        if (s.includes('betaald') || s.includes('paid')) rawBody.status = 'paid';
+        else if (s.includes('open') || s.includes('verzonden') || s.includes('sent')) rawBody.status = 'sent';
+        else rawBody.status = 'draft';
+      }
+
+      const bodyCheck = createInvoiceSchema.safeParse(rawBody);
       if (!bodyCheck.success) {
         return reply.status(400).send({
           success: false,

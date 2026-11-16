@@ -27,7 +27,7 @@ export const projectRoutes = async (fastify) => {
      * GET /api/projects
      * List projects with search, filtering, pagination (Admin & Partner)
      */
-    fastify.get('/', { preHandler: [fastify.authenticate, fastify.authorize(['admin', 'partner', 'customer'])] }, async (request, reply) => {
+    fastify.get('/', { preHandler: [fastify.authenticate, fastify.authorize(['admin', 'partner'])] }, async (request, reply) => {
         const queryResult = projectListQuerySchema.safeParse(request.query);
         if (!queryResult.success) {
             return reply.status(400).send({

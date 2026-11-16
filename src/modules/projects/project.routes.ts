@@ -55,7 +55,7 @@ export const projectRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get(
     '/',
-    { preHandler: [fastify.authenticate, fastify.authorize(['admin', 'partner', 'customer'])] },
+    { preHandler: [fastify.authenticate, fastify.authorize(['admin', 'partner'])] },
     async (request, reply) => {
       const queryResult = projectListQuerySchema.safeParse(request.query);
       if (!queryResult.success) {

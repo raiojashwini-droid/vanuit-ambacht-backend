@@ -22,6 +22,9 @@ export class QuoteService {
         const [comp] = await db.select({ quotePrefix: companySettings.quotePrefix }).from(companySettings).limit(1);
         let rawPrefix = comp?.quotePrefix?.trim() || `OF-${year}`;
         rawPrefix = rawPrefix.replace(/^#/, '');
+        if (rawPrefix.startsWith('Q') || !rawPrefix.includes(`${year}`)) {
+            rawPrefix = `OF-${year}`;
+        }
         const prefix = rawPrefix.endsWith('-') ? rawPrefix : `${rawPrefix}-`;
         const [latest] = await db
             .select({ quoteNumber: quotes.quoteNumber })
