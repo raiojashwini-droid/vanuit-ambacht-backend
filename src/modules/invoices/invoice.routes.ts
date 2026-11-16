@@ -22,7 +22,7 @@ async function resolveInvoiceId(idOrNumber: string): Promise<string | null> {
   const [found] = await db
     .select({ id: invoices.id })
     .from(invoices)
-    .where(or(eq(invoices.invoiceNumber, idOrNumber), eq(invoices.id, idOrNumber as any)))
+    .where(eq(invoices.invoiceNumber, idOrNumber))
     .limit(1);
 
   return found?.id || null;
