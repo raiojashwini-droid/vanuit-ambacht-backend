@@ -294,7 +294,24 @@ export const invoiceRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const bodyCheck = updateInvoiceSchema.safeParse(request.body);
+      const rawBody = (request.body as any) || {};
+      const query = (request.query as any) || {};
+      const force = query.force === 'true' || query.force === true || rawBody.force === true;
+
+      // Normalize Dutch status if sent
+      if (rawBody.status) {
+        if (rawBody.status === 'Openstaand') rawBody.status = 'sent';
+        else if (rawBody.status === 'Betaald') rawBody.status = 'paid';
+        else if (rawBody.status === 'Concept') rawBody.status = 'draft';
+        else if (rawBody.status === 'Vervallen') rawBody.status = 'overdue';
+      }
+
+      // If dueDate is not YYYY-MM-DD, remove to avoid validation failure
+      if (rawBody.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(rawBody.dueDate)) {
+        delete rawBody.dueDate;
+      }
+
+      const bodyCheck = updateInvoiceSchema.safeParse(rawBody);
       if (!bodyCheck.success) {
         return reply.status(400).send({
           success: false,
@@ -306,7 +323,7 @@ export const invoiceRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       try {
-        const updated = await invoiceService.update(targetId, bodyCheck.data, request.user);
+        const updated = await invoiceService.update(targetId, bodyCheck.data, request.user, force);
         return reply.send({
           success: true,
           data: updated,

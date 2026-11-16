@@ -42,11 +42,15 @@ export const updateInvoiceSchema = z.object({
   invoiceType: z
     .enum(['down_payment_upfront', 'final_completion', 'interim_progress', 'full_amount'])
     .optional(),
+  status: z
+    .enum(['draft', 'sent', 'paid', 'partially_paid', 'overdue', 'credited', 'cancelled'])
+    .optional(),
   issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'issueDate must be YYYY-MM-DD').optional(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dueDate must be YYYY-MM-DD').optional(),
   paymentTermsDays: z.number().int().min(1).max(180).optional(),
   notes: z.string().optional().nullable(),
   items: z.array(invoiceItemInputSchema).min(1, 'At least 1 invoice item is required').optional(),
+  force: z.boolean().optional(),
 });
 
 export const markPaidSchema = z.object({

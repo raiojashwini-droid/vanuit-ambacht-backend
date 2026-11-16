@@ -592,7 +592,7 @@ export class InvoiceService {
    * PATCH /api/invoices/:id
    * Update invoice (Admin only, allowed ONLY in draft status)
    */
-  async update(id: string, data: UpdateInvoiceInput, user: JwtTokenPayload): Promise<InvoiceDto> {
+  async update(id: string, data: UpdateInvoiceInput, user: JwtTokenPayload, force = false): Promise<InvoiceDto> {
     if (user.role !== 'admin') {
       throw new InvoiceError('Only administrators can update invoices', 403, 'FORBIDDEN');
     }
@@ -607,8 +607,8 @@ export class InvoiceService {
       throw new InvoiceError('Invoice not found', 404, 'NOT_FOUND');
     }
 
-    // Belastingdienst Compliance: Only drafts can be modified!
-    if (existing.status !== 'draft') {
+    // Belastingdienst Compliance: Only drafts can be modified unless force is true!
+    if (!force && existing.status !== 'draft') {
       throw new InvoiceError(
         'Belastingdienst compliance: Finalized or sent invoices cannot be modified. Issue a credit note instead.',
         400,
@@ -621,6 +621,7 @@ export class InvoiceService {
         updatedAt: new Date(),
       };
 
+      if ((data as any).status) updatePayload.status = (data as any).status;
       if (data.projectId) updatePayload.projectId = data.projectId;
       if (data.quoteId !== undefined) updatePayload.quoteId = data.quoteId;
       if (data.milestoneId !== undefined) updatePayload.milestoneId = data.milestoneId;
