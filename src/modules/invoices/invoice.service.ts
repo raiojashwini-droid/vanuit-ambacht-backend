@@ -622,6 +622,7 @@ export class InvoiceService {
       };
 
       if ((data as any).status) updatePayload.status = (data as any).status;
+      if ((data as any).customerId) updatePayload.customerId = (data as any).customerId;
       if (data.projectId) updatePayload.projectId = data.projectId;
       if (data.quoteId !== undefined) updatePayload.quoteId = data.quoteId;
       if (data.milestoneId !== undefined) updatePayload.milestoneId = data.milestoneId;

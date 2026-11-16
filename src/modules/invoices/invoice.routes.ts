@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../../db/index.js';
-import { projects, invoices } from '../../db/schema.js';
-import { eq, ilike, desc, or } from 'drizzle-orm';
+import { projects, invoices, customers } from '../../db/schema.js';
+import { eq, ilike, desc, or, sql, and, ne } from 'drizzle-orm';
 import { invoiceService, InvoiceError } from './invoice.service.js';
 import { invoicePdfService } from './invoice-pdf.service.js';
 import {
@@ -26,6 +26,64 @@ async function resolveInvoiceId(idOrNumber: string): Promise<string | null> {
     .limit(1);
 
   return found?.id || null;
+}
+
+async function resolveOrCreateCustomer(
+  cleanName: string,
+  extra?: { email?: string; phone?: string; address?: string; city?: string }
+): Promise<string> {
+  const parts = cleanName.trim().split(/\s+/);
+  const firstName = parts[0] || 'Klant';
+  const lastName = parts.slice(1).join(' ') || 'Ambacht';
+
+  const [existing] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(
+      or(
+        ilike(sql`concat(${customers.firstName}, ' ', ${customers.lastName})`, cleanName),
+        and(eq(customers.firstName, firstName), eq(customers.lastName, lastName))
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    if (extra?.phone || extra?.address || extra?.city) {
+      await db
+        .update(customers)
+        .set({
+          phone: extra.phone || undefined,
+          streetAddress: extra.address || undefined,
+          city: extra.city || undefined,
+          updatedAt: new Date(),
+        })
+        .where(eq(customers.id, existing.id));
+    }
+    return existing.id;
+  }
+
+  const [maxCust] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(customers);
+  const nextNum = `CUST-2026-${String((maxCust?.count || 0) + 1).padStart(3, '0')}`;
+  const safeEmail =
+    extra?.email ||
+    `${firstName.toLowerCase().replace(/[^a-z0-9]/g, '')}.${Date.now().toString().slice(-4)}@vanuitambacht.nl`;
+
+  const [newCust] = await db
+    .insert(customers)
+    .values({
+      customerNumber: nextNum,
+      firstName,
+      lastName,
+      email: safeEmail,
+      phone: extra?.phone || '+31 6 00000000',
+      city: extra?.city || 'Amsterdam',
+      streetAddress: extra?.address || null,
+    })
+    .returning({ id: customers.id });
+
+  return newCust.id;
 }
 
 export const invoiceRoutes: FastifyPluginAsync = async (fastify) => {
@@ -104,6 +162,17 @@ export const invoiceRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [fastify.authenticate, fastify.authorize(['admin'])] },
     async (request, reply) => {
       const rawBody = (request.body as any) || {};
+
+      // 0. Auto-resolve or create customer if customerName is passed
+      if (rawBody.customerName && typeof rawBody.customerName === 'string' && rawBody.customerName.trim()) {
+        const custId = await resolveOrCreateCustomer(rawBody.customerName.trim(), {
+          email: rawBody.customerEmail || rawBody.email,
+          phone: rawBody.phone,
+          address: rawBody.address,
+          city: rawBody.city,
+        });
+        rawBody.customerId = custId;
+      }
 
       // 1. Auto-resolve projectId if missing
       if (!rawBody.projectId) {
@@ -309,6 +378,52 @@ export const invoiceRoutes: FastifyPluginAsync = async (fastify) => {
       // If dueDate is not YYYY-MM-DD, remove to avoid validation failure
       if (rawBody.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(rawBody.dueDate)) {
         delete rawBody.dueDate;
+      }
+
+      // If customerName is updated, ensure customer record reflects it
+      if (rawBody.customerName && typeof rawBody.customerName === 'string' && rawBody.customerName.trim()) {
+        const cleanName = rawBody.customerName.trim();
+        const parts = cleanName.split(/\s+/);
+        const firstName = parts[0] || 'Klant';
+        const lastName = parts.slice(1).join(' ') || 'Ambacht';
+
+        const [invRow] = await db
+          .select({ id: invoices.id, customerId: invoices.customerId })
+          .from(invoices)
+          .where(eq(invoices.id, targetId))
+          .limit(1);
+
+        if (invRow?.customerId) {
+          const [otherInvs] = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(invoices)
+            .where(and(eq(invoices.customerId, invRow.customerId), ne(invoices.id, targetId)));
+
+          if (!otherInvs || otherInvs.count === 0) {
+            await db
+              .update(customers)
+              .set({
+                firstName,
+                lastName,
+                phone: rawBody.phone || undefined,
+                streetAddress: rawBody.address || undefined,
+                city: rawBody.city || undefined,
+                updatedAt: new Date(),
+              })
+              .where(eq(customers.id, invRow.customerId));
+          } else {
+            const newCustId = await resolveOrCreateCustomer(cleanName, {
+              email: rawBody.customerEmail || rawBody.email,
+              phone: rawBody.phone,
+              address: rawBody.address,
+              city: rawBody.city,
+            });
+            await db
+              .update(invoices)
+              .set({ customerId: newCustId, updatedAt: new Date() })
+              .where(eq(invoices.id, targetId));
+          }
+        }
       }
 
       const bodyCheck = updateInvoiceSchema.safeParse(rawBody);

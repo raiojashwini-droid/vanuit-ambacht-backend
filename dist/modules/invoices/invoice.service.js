@@ -462,7 +462,7 @@ export class InvoiceService {
      * PATCH /api/invoices/:id
      * Update invoice (Admin only, allowed ONLY in draft status)
      */
-    async update(id, data, user) {
+    async update(id, data, user, force = false) {
         if (user.role !== 'admin') {
             throw new InvoiceError('Only administrators can update invoices', 403, 'FORBIDDEN');
         }
@@ -474,14 +474,18 @@ export class InvoiceService {
         if (!existing) {
             throw new InvoiceError('Invoice not found', 404, 'NOT_FOUND');
         }
-        // Belastingdienst Compliance: Only drafts can be modified!
-        if (existing.status !== 'draft') {
+        // Belastingdienst Compliance: Only drafts can be modified unless force is true!
+        if (!force && existing.status !== 'draft') {
             throw new InvoiceError('Belastingdienst compliance: Finalized or sent invoices cannot be modified. Issue a credit note instead.', 400, 'INVOICE_LOCKED');
         }
         await db.transaction(async (tx) => {
             const updatePayload = {
                 updatedAt: new Date(),
             };
+            if (data.status)
+                updatePayload.status = data.status;
+            if (data.customerId)
+                updatePayload.customerId = data.customerId;
             if (data.projectId)
                 updatePayload.projectId = data.projectId;
             if (data.quoteId !== undefined)

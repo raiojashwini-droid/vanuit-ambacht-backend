@@ -22,6 +22,7 @@ export const invoiceItemInputSchema = z.object({
 export const createInvoiceSchema = z.object({
   projectId: z.string().uuid('Invalid project UUID'),
   customerId: z.string().uuid('Invalid customer UUID').optional(),
+  customerName: z.string().optional(),
   quoteId: z.string().uuid('Invalid quote UUID').optional().nullable(),
   milestoneId: z.string().uuid('Invalid milestone UUID').optional().nullable(),
   invoiceType: z
@@ -37,6 +38,8 @@ export const createInvoiceSchema = z.object({
 
 export const updateInvoiceSchema = z.object({
   projectId: z.string().uuid('Invalid project UUID').optional(),
+  customerId: z.string().uuid('Invalid customer UUID').optional(),
+  customerName: z.string().optional(),
   quoteId: z.string().uuid('Invalid quote UUID').optional().nullable(),
   milestoneId: z.string().uuid('Invalid milestone UUID').optional().nullable(),
   invoiceType: z
