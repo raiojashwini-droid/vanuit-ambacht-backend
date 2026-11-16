@@ -85,6 +85,8 @@ export interface PartnerPriceRequestDto {
   requestedAt: string;
   expectedResponseDate: string;
   status: PprStatus;
+  responsiblePerson?: string;
+  assignedToUserId?: string;
   createdAt: string;
   updatedAt: string;
 
