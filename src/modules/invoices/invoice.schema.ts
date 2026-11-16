@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const invoiceIdParamSchema = z.object({
-  id: z.string().uuid('Invalid invoice UUID'),
+  id: z.string().trim().min(1, 'Invalid invoice ID or number'),
 });
 
 export const projectInvoicesParamSchema = z.object({

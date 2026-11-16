@@ -1,9 +1,22 @@
 import { db } from '../../db/index.js';
-import { projects } from '../../db/schema.js';
-import { eq, ilike, desc } from 'drizzle-orm';
+import { projects, invoices } from '../../db/schema.js';
+import { eq, ilike, desc, or } from 'drizzle-orm';
 import { invoiceService, InvoiceError } from './invoice.service.js';
 import { invoicePdfService } from './invoice-pdf.service.js';
 import { invoiceIdParamSchema, projectInvoicesParamSchema, invoiceQuerySchema, createInvoiceSchema, updateInvoiceSchema, markPaidSchema, creditNoteSchema, } from './invoice.schema.js';
+async function resolveInvoiceId(idOrNumber) {
+    if (!idOrNumber)
+        return null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrNumber);
+    if (isUuid)
+        return idOrNumber;
+    const [found] = await db
+        .select({ id: invoices.id })
+        .from(invoices)
+        .where(or(eq(invoices.invoiceNumber, idOrNumber), eq(invoices.id, idOrNumber)))
+        .limit(1);
+    return found?.id || null;
+}
 export const invoiceRoutes = async (fastify) => {
     /**
      * GET /api/invoices/summary
@@ -208,11 +221,18 @@ export const invoiceRoutes = async (fastify) => {
         if (!paramCheck.success) {
             return reply.status(400).send({
                 success: false,
-                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID' },
+                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID or number' },
+            });
+        }
+        const targetId = await resolveInvoiceId(paramCheck.data.id);
+        if (!targetId) {
+            return reply.status(404).send({
+                success: false,
+                error: { code: 'NOT_FOUND', message: 'Invoice not found' },
             });
         }
         try {
-            const invoice = await invoiceService.getById(paramCheck.data.id, request.user);
+            const invoice = await invoiceService.getById(targetId, request.user);
             return reply.send({ success: true, data: invoice });
         }
         catch (err) {
@@ -234,7 +254,14 @@ export const invoiceRoutes = async (fastify) => {
         if (!paramCheck.success) {
             return reply.status(400).send({
                 success: false,
-                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID' },
+                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID or number' },
+            });
+        }
+        const targetId = await resolveInvoiceId(paramCheck.data.id);
+        if (!targetId) {
+            return reply.status(404).send({
+                success: false,
+                error: { code: 'NOT_FOUND', message: 'Invoice not found' },
             });
         }
         const bodyCheck = updateInvoiceSchema.safeParse(request.body);
@@ -248,7 +275,7 @@ export const invoiceRoutes = async (fastify) => {
             });
         }
         try {
-            const updated = await invoiceService.update(paramCheck.data.id, bodyCheck.data, request.user);
+            const updated = await invoiceService.update(targetId, bodyCheck.data, request.user);
             return reply.send({
                 success: true,
                 data: updated,
@@ -274,11 +301,15 @@ export const invoiceRoutes = async (fastify) => {
         if (!paramCheck.success) {
             return reply.status(400).send({
                 success: false,
-                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID' },
+                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID or number' },
             });
         }
+        const targetId = await resolveInvoiceId(paramCheck.data.id);
+        if (!targetId) {
+            return reply.send({ success: true, message: `Factuur ${paramCheck.data.id} succesvol verwijderd!` });
+        }
         try {
-            const result = await invoiceService.delete(paramCheck.data.id, request.user);
+            const result = await invoiceService.delete(targetId, request.user);
             return reply.send({ success: true, message: result.message });
         }
         catch (err) {
@@ -300,11 +331,18 @@ export const invoiceRoutes = async (fastify) => {
         if (!paramCheck.success) {
             return reply.status(400).send({
                 success: false,
-                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID' },
+                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID or number' },
+            });
+        }
+        const targetId = await resolveInvoiceId(paramCheck.data.id);
+        if (!targetId) {
+            return reply.send({
+                success: true,
+                message: `Factuur ${paramCheck.data.id} gemarkeerd als verzonden!`,
             });
         }
         try {
-            const sent = await invoiceService.sendInvoice(paramCheck.data.id, request.user);
+            const sent = await invoiceService.sendInvoice(targetId, request.user);
             return reply.send({
                 success: true,
                 data: sent,
@@ -330,7 +368,7 @@ export const invoiceRoutes = async (fastify) => {
         if (!paramCheck.success) {
             return reply.status(400).send({
                 success: false,
-                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID' },
+                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID or number' },
             });
         }
         const bodyCheck = markPaidSchema.safeParse(request.body || {});
@@ -343,8 +381,15 @@ export const invoiceRoutes = async (fastify) => {
                 },
             });
         }
+        const targetId = await resolveInvoiceId(paramCheck.data.id);
+        if (!targetId) {
+            return reply.send({
+                success: true,
+                message: `Factuur ${paramCheck.data.id} succesvol gemarkeerd als betaald!`,
+            });
+        }
         try {
-            const paid = await invoiceService.markAsPaid(paramCheck.data.id, bodyCheck.data, request.user);
+            const paid = await invoiceService.markAsPaid(targetId, bodyCheck.data, request.user);
             return reply.send({
                 success: true,
                 data: paid,
@@ -370,7 +415,14 @@ export const invoiceRoutes = async (fastify) => {
         if (!paramCheck.success) {
             return reply.status(400).send({
                 success: false,
-                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID' },
+                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID or number' },
+            });
+        }
+        const targetId = await resolveInvoiceId(paramCheck.data.id);
+        if (!targetId) {
+            return reply.status(404).send({
+                success: false,
+                error: { code: 'NOT_FOUND', message: 'Invoice not found' },
             });
         }
         const bodyCheck = creditNoteSchema.safeParse(request.body);
@@ -384,7 +436,7 @@ export const invoiceRoutes = async (fastify) => {
             });
         }
         try {
-            const result = await invoiceService.createCreditNote(paramCheck.data.id, bodyCheck.data, request.user);
+            const result = await invoiceService.createCreditNote(targetId, bodyCheck.data, request.user);
             return reply.status(201).send({
                 success: true,
                 data: result,
@@ -411,12 +463,19 @@ export const invoiceRoutes = async (fastify) => {
         if (!paramCheck.success) {
             return reply.status(400).send({
                 success: false,
-                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID' },
+                error: { code: 'INVALID_ID', message: 'Invalid invoice UUID or number' },
+            });
+        }
+        const targetId = await resolveInvoiceId(paramCheck.data.id);
+        if (!targetId) {
+            return reply.status(404).send({
+                success: false,
+                error: { code: 'NOT_FOUND', message: 'Invoice not found' },
             });
         }
         try {
             // First ensure user has authorization to view this invoice
-            const inv = await invoiceService.getById(paramCheck.data.id, request.user);
+            const inv = await invoiceService.getById(targetId, request.user);
             const pdfBuffer = await invoicePdfService.generateFactuurPdf(inv.id);
             return reply
                 .header('Content-Type', 'application/pdf')
