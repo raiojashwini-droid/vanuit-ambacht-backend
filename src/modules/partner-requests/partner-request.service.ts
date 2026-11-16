@@ -116,6 +116,8 @@ export class PartnerRequestService {
    * Map database partner offer record to PartnerOfferDto
    */
   private mapOfferToDto(offer: any, partnerCompanyName?: string): PartnerOfferDto {
+    const weeks = offer.estimatedLeadTimeWeeks != null ? Number(offer.estimatedLeadTimeWeeks) : (offer.leadTimeWeeks != null ? Number(offer.leadTimeWeeks) : null);
+    const notes = offer.partnerNotes ?? offer.notes ?? null;
     return {
       id: offer.id,
       offerNumber: offer.offerNumber,
@@ -127,8 +129,11 @@ export class PartnerRequestService {
       laborHours: offer.laborHours != null ? Number(offer.laborHours) : null,
       materialsCost: offer.materialsCost != null ? Number(offer.materialsCost) : null,
       laborCost: offer.laborCost != null ? Number(offer.laborCost) : null,
-      estimatedLeadTimeWeeks: offer.estimatedLeadTimeWeeks,
-      partnerNotes: offer.partnerNotes,
+      estimatedLeadTimeWeeks: weeks,
+      leadTimeWeeks: weeks,
+      leadTime: weeks ? `${weeks} weken` : null,
+      partnerNotes: notes,
+      notes: notes,
       breakdown: (offer.breakdown as OfferBreakdown) || null,
       status: offer.status,
       submittedAt: offer.submittedAt ? new Date(offer.submittedAt).toISOString() : new Date().toISOString(),
@@ -247,18 +252,14 @@ export class PartnerRequestService {
       return { items: [], total: 0, page, limit, totalPages: 0 };
     }
 
-    // Query records with partner info, lead location and responsible user
+    // Query records with partner info
     const rows = await db
       .select({
         request: partnerPriceRequests,
         partnerCompanyName: partners.companyName,
-        leadCity: leads.city,
-        leadAssignedToName: users.fullName,
       })
       .from(partnerPriceRequests)
       .leftJoin(partners, eq(partnerPriceRequests.partnerId, partners.id))
-      .leftJoin(leads, eq(partnerPriceRequests.leadId, leads.id))
-      .leftJoin(users, eq(leads.assignedToUserId, users.id))
       .where(whereClause)
       .orderBy(desc(partnerPriceRequests.createdAt))
       .limit(limit)
@@ -324,21 +325,13 @@ export class PartnerRequestService {
     }
 
     // Build DTOs
-    const items: PartnerPriceRequestDto[] = rows.map(({ request: r, partnerCompanyName, leadCity, leadAssignedToName }) => {
+    const items: PartnerPriceRequestDto[] = rows.map(({ request: r, partnerCompanyName }) => {
       const attachments = attachmentsByLeadMap[r.leadId] || (r.partnerId ? attachmentsByLeadMap[r.partnerId] : []) || [];
-      return this.mapRequestToDto(
-        {
-          ...r,
-          leadCity,
-          leadAssignedToName,
-        },
-        user.role,
-        {
-          partnerName: partnerCompanyName || undefined,
-          activeOffer: activeOffersMap[r.id] || null,
-          attachments,
-        }
-      );
+      return this.mapRequestToDto(r, user.role, {
+        partnerName: partnerCompanyName || undefined,
+        activeOffer: activeOffersMap[r.id] || null,
+        attachments,
+      });
     });
 
     return {
@@ -368,12 +361,10 @@ export class PartnerRequestService {
         leadAddress: leads.address,
         leadCity: leads.city,
         customerId: leads.customerId,
-        leadAssignedToName: users.fullName,
       })
       .from(partnerPriceRequests)
       .leftJoin(partners, eq(partnerPriceRequests.partnerId, partners.id))
       .leftJoin(leads, eq(partnerPriceRequests.leadId, leads.id))
-      .leftJoin(users, eq(leads.assignedToUserId, users.id))
       .where(eq(partnerPriceRequests.id, id))
       .limit(1);
 
@@ -462,21 +453,13 @@ export class PartnerRequestService {
       createdAt: d.createdAt.toISOString(),
     }));
 
-    return this.mapRequestToDto(
-      {
-        ...req,
-        leadCity: row.leadCity,
-        leadAssignedToName: row.leadAssignedToName,
-      },
-      user.role,
-      {
-        partnerName: partnerCompanyName || undefined,
-        customer: customerData,
-        attachments,
-        offers,
-        activeOffer,
-      }
-    );
+    return this.mapRequestToDto(req, user.role, {
+      partnerName: partnerCompanyName || undefined,
+      customer: customerData,
+      attachments,
+      offers,
+      activeOffer,
+    });
   }
 
   /**
@@ -546,23 +529,8 @@ export class PartnerRequestService {
         note: `Partner price request ${requestNumber} sent to partner ${partner.companyName} (${partner.partnerCode})`,
       });
 
-      // Link tender attachments if provided so they are visible to partner
-      if (input.attachmentIds && input.attachmentIds.length > 0) {
-        await tx
-          .update(documents)
-          .set({
-            leadId: input.leadId,
-            partnerId: input.partnerId,
-            isPublicForPartner: true,
-          })
-          .where(inArray(documents.id, input.attachmentIds));
-      }
-
       return newRequest;
     });
-
-    syncService.bump('partners');
-    syncService.bump('leads');
 
     return this.mapRequestToDto(created, 'admin', {
       partnerName: partner.companyName,
@@ -644,7 +612,7 @@ export class PartnerRequestService {
       }
     }
 
-    const result = await db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       // 1. Calculate revision number: max existing revision + 1
       const [maxRev] = await tx
         .select({ maxRevision: sql<number>`COALESCE(MAX(${partnerOffers.revisionNumber}), 0)::int` })
@@ -679,8 +647,8 @@ export class PartnerRequestService {
           laborHours: input.laborHours != null ? sql`${input.laborHours}::numeric` : null,
           materialsCost: input.materialsCost != null ? sql`${input.materialsCost}::numeric` : null,
           laborCost: input.laborCost != null ? sql`${input.laborCost}::numeric` : null,
-          estimatedLeadTimeWeeks: input.estimatedLeadTimeWeeks || null,
-          partnerNotes: input.partnerNotes || null,
+          estimatedLeadTimeWeeks: input.estimatedLeadTimeWeeks ?? input.leadTimeWeeks ?? null,
+          partnerNotes: input.partnerNotes ?? input.notes ?? null,
           breakdown: input.breakdown || null,
           status: 'submitted',
         })
@@ -722,11 +690,6 @@ export class PartnerRequestService {
 
       return this.mapOfferToDto(newOffer);
     });
-
-    syncService.bump('partners');
-    syncService.bump('leads');
-
-    return result;
   }
 
   /**
@@ -796,7 +759,7 @@ export class PartnerRequestService {
       throw new PartnerRequestError(`Cannot select offer with status '${offer.status}'`, 400, 'INVALID_OFFER_STATUS');
     }
 
-    const result = await db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       // 1. Mark selected offer as 'accepted'
       const [acceptedOffer] = await tx
         .update(partnerOffers)
@@ -858,11 +821,6 @@ export class PartnerRequestService {
         selectedOffer: this.mapOfferToDto(acceptedOffer),
       };
     });
-
-    syncService.bump('partners');
-    syncService.bump('leads');
-
-    return result;
   }
 
   /**
@@ -891,7 +849,7 @@ export class PartnerRequestService {
       }
     }
 
-    const result = await db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       // 1. Update request status to 'declined'
       const [updatedRequest] = await tx
         .update(partnerPriceRequests)
@@ -912,11 +870,6 @@ export class PartnerRequestService {
 
       return this.mapRequestToDto(updatedRequest, user.role);
     });
-
-    syncService.bump('partners');
-    syncService.bump('leads');
-
-    return result;
   }
 
   /**

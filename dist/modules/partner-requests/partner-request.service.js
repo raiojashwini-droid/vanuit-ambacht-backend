@@ -71,6 +71,8 @@ export class PartnerRequestService {
      * Map database partner offer record to PartnerOfferDto
      */
     mapOfferToDto(offer, partnerCompanyName) {
+        const weeks = offer.estimatedLeadTimeWeeks != null ? Number(offer.estimatedLeadTimeWeeks) : (offer.leadTimeWeeks != null ? Number(offer.leadTimeWeeks) : null);
+        const notes = offer.partnerNotes ?? offer.notes ?? null;
         return {
             id: offer.id,
             offerNumber: offer.offerNumber,
@@ -82,8 +84,11 @@ export class PartnerRequestService {
             laborHours: offer.laborHours != null ? Number(offer.laborHours) : null,
             materialsCost: offer.materialsCost != null ? Number(offer.materialsCost) : null,
             laborCost: offer.laborCost != null ? Number(offer.laborCost) : null,
-            estimatedLeadTimeWeeks: offer.estimatedLeadTimeWeeks,
-            partnerNotes: offer.partnerNotes,
+            estimatedLeadTimeWeeks: weeks,
+            leadTimeWeeks: weeks,
+            leadTime: weeks ? `${weeks} weken` : null,
+            partnerNotes: notes,
+            notes: notes,
             breakdown: offer.breakdown || null,
             status: offer.status,
             submittedAt: offer.submittedAt ? new Date(offer.submittedAt).toISOString() : new Date().toISOString(),
@@ -108,6 +113,7 @@ export class PartnerRequestService {
             requestedAt: req.requestedAt ? new Date(req.requestedAt).toISOString() : new Date().toISOString(),
             expectedResponseDate: req.expectedResponseDate ? String(req.expectedResponseDate).split('T')[0] : '',
             status: req.status,
+            responsiblePerson: extra?.partnerName && req.leadAssignedToName ? req.leadAssignedToName : req.leadAssignedToName || 'Tim & Bram',
             createdAt: req.createdAt ? new Date(req.createdAt).toISOString() : new Date().toISOString(),
             updatedAt: req.updatedAt ? new Date(req.updatedAt).toISOString() : new Date().toISOString(),
             attachments: extra?.attachments || [],
@@ -513,8 +519,8 @@ export class PartnerRequestService {
                 laborHours: input.laborHours != null ? sql `${input.laborHours}::numeric` : null,
                 materialsCost: input.materialsCost != null ? sql `${input.materialsCost}::numeric` : null,
                 laborCost: input.laborCost != null ? sql `${input.laborCost}::numeric` : null,
-                estimatedLeadTimeWeeks: input.estimatedLeadTimeWeeks || null,
-                partnerNotes: input.partnerNotes || null,
+                estimatedLeadTimeWeeks: input.estimatedLeadTimeWeeks ?? input.leadTimeWeeks ?? null,
+                partnerNotes: input.partnerNotes ?? input.notes ?? null,
                 breakdown: input.breakdown || null,
                 status: 'submitted',
             })

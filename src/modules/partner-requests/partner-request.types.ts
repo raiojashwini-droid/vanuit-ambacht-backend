@@ -61,7 +61,10 @@ export interface PartnerOfferDto {
   materialsCost?: number | null;
   laborCost?: number | null;
   estimatedLeadTimeWeeks?: number | null;
+  leadTimeWeeks?: number | null;
+  leadTime?: string | null;
   partnerNotes?: string | null;
+  notes?: string | null;
   breakdown?: OfferBreakdown | null;
   status: PartnerOfferStatus;
   submittedAt: string;

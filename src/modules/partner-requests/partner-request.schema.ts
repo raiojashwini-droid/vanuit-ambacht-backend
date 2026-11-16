@@ -61,7 +61,10 @@ export const submitOfferSchema = z.object({
   materialsCost: z.number().nonnegative().optional().nullable(),
   laborCost: z.number().nonnegative().optional().nullable(),
   estimatedLeadTimeWeeks: z.number().int().positive().optional().nullable(),
+  leadTimeWeeks: z.number().int().positive().optional().nullable(),
   partnerNotes: z.string().trim().optional().nullable(),
+  notes: z.string().trim().optional().nullable(),
+  validUntil: z.string().optional().nullable(),
   breakdown: offerBreakdownSchema,
 });
 
