@@ -23,6 +23,7 @@ import type {
 } from './invoice.types.js';
 import type { JwtTokenPayload } from '../../types/auth.types.js';
 import { accountingService } from '../accounting/accounting.service.js';
+import { syncService } from '../sync/sync.service.js';
 
 export class InvoiceError extends Error {
   statusCode: number;
@@ -585,6 +586,7 @@ export class InvoiceService {
       return newInv.id;
     });
 
+    syncService.bump('invoices');
     return await this.getById(createdInvoiceId, user);
   }
 
@@ -660,6 +662,7 @@ export class InvoiceService {
       await tx.update(invoices).set(updatePayload).where(eq(invoices.id, id));
     });
 
+    syncService.bump('invoices');
     return await this.getById(id, user);
   }
 
@@ -712,6 +715,7 @@ export class InvoiceService {
       await tx.delete(invoices).where(eq(invoices.id, id));
     });
 
+    syncService.bump('invoices');
     return {
       success: true,
       message: `Invoice ${existing.invoiceNumber} deleted successfully.`,
@@ -777,6 +781,7 @@ export class InvoiceService {
       await accountingService.postSalesInvoiceEntry(id, tx);
     });
 
+    syncService.bump('invoices');
     return await this.getById(id, user);
   }
 
@@ -873,6 +878,7 @@ export class InvoiceService {
       }
     });
 
+    syncService.bump('invoices');
     return await this.getById(id, user);
   }
 

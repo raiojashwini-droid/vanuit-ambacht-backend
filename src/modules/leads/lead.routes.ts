@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   leadQuerySchema,
   createLeadSchema,
+  bulkImportLeadsSchema,
   updateLeadSchema,
   updateStepSchema,
   updateStatusSchema,
@@ -126,6 +127,43 @@ export const leadRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(500).send({
           success: false,
           error: { code: 'INTERNAL_ERROR', message: 'Failed to create lead' },
+        });
+      }
+    }
+  );
+
+  /**
+   * POST /api/leads/bulk-import
+   * Bulk import leads from CSV / spreadsheet (Admin only)
+   */
+  fastify.post(
+    '/bulk-import',
+    { preHandler: [fastify.authenticate, fastify.authorize(['admin'])] },
+    async (request, reply) => {
+      const parseResult = bulkImportLeadsSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'VALIDATION_FAILED',
+            message: 'Invalid bulk import payload',
+            details: parseResult.error.format(),
+          },
+        });
+      }
+
+      try {
+        const result = await leadService.bulkImport(parseResult.data.leads, request.user.sub);
+        return reply.status(201).send({
+          success: true,
+          message: `Bulk import completed: ${result.importedCount} imported, ${result.skippedCount} skipped`,
+          data: result,
+        });
+      } catch (err: any) {
+        fastify.log.error(err);
+        return reply.status(500).send({
+          success: false,
+          error: { code: 'INTERNAL_ERROR', message: 'Failed to bulk import leads' },
         });
       }
     }

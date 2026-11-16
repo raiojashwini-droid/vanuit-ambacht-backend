@@ -43,6 +43,47 @@ export const updateStatusSchema = z.object({
   lostReason: z.string().nullable().optional(),
 });
 
+export const bulkImportLeadItemSchema = z.object({
+  name: z.string().trim().min(1, 'Lead name is required').max(150),
+  email: z
+    .string()
+    .trim()
+    .nullable()
+    .optional()
+    .transform((val) => {
+      if (!val || !val.includes('@')) return null;
+      return val.toLowerCase();
+    }),
+  phone: z
+    .string()
+    .trim()
+    .max(50)
+    .nullable()
+    .optional()
+    .transform((val) => (val && val !== '-' ? val : null)),
+  address: z.string().trim().max(255).nullable().optional(),
+  city: z.string().trim().max(100).nullable().optional(),
+  productType: z.enum(productTypeEnumValues).default('outdoor_kitchen'),
+  dimensionsInquiry: z
+    .string()
+    .trim()
+    .max(100)
+    .nullable()
+    .optional()
+    .transform((val) => (val && val !== '-' ? val : null)),
+  source: z.string().trim().max(100).default('CSV Import'),
+  status: z.enum(leadStatusEnumValues).default('new'),
+  workflowStep: z.coerce.number().int().min(1).max(8).default(1),
+  assignedToUserId: z.string().uuid().optional(),
+  assignee: z.string().trim().max(100).optional(),
+  assignedTo: z.string().trim().max(100).optional(),
+  notes: z.string().nullable().optional(),
+});
+
+export const bulkImportLeadsSchema = z.object({
+  leads: z.array(bulkImportLeadItemSchema).min(1, 'At least one lead is required for bulk import'),
+});
+
 export const addVoiceNoteSchema = z.object({
   fileName: z.string().trim().min(1, 'File name is required').max(255),
   fileUrl: z.string().trim().min(1, 'File URL or storage identifier is required'),

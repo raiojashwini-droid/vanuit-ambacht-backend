@@ -18,6 +18,7 @@ import {
   users,
   companySettings,
 } from '../../db/schema.js';
+import { syncService } from '../sync/sync.service.js';
 import type {
   CreateQuoteInput,
   UpdateQuoteInput,
@@ -665,7 +666,9 @@ export class QuoteService {
       }
 
       const activeVersion = this.mapVersionToDto(v1, totals.processedItems);
-      return this.mapQuoteToDto(newQuote, { lead: leadRecord, activeVersion, versions: [activeVersion] });
+      const resDto = this.mapQuoteToDto(newQuote, { lead: leadRecord, activeVersion, versions: [activeVersion] });
+      syncService.bump('quotes');
+      return resDto;
     });
   }
 
@@ -691,6 +694,7 @@ export class QuoteService {
     if (input.leadId !== undefined) updateData.leadId = input.leadId;
 
     await db.update(quotes).set(updateData).where(eq(quotes.id, existing.id));
+    syncService.bump('quotes');
     return await this.getById(existing.id, { sub: adminUserId, role: 'admin', email: '', fullName: '' });
   }
 
@@ -841,6 +845,7 @@ export class QuoteService {
       await tx.update(quotes).set({ updatedAt: new Date() }).where(eq(quotes.id, quote.id));
     });
 
+    syncService.bump('quotes');
     return await this.getById(quote.id, { sub: adminUserId, role: 'admin', email: '', fullName: '' });
   }
 
@@ -909,6 +914,7 @@ export class QuoteService {
       }
     });
 
+    syncService.bump('quotes');
     return await this.getById(quote.id, { sub: adminUserId, role: 'admin', email: '', fullName: '' });
   }
 

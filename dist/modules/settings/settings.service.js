@@ -2,6 +2,7 @@ import { db } from '../../db/index.js';
 import { companySettings, users, partners, customers } from '../../db/schema.js';
 import { eq, and, ne, desc, count, ilike } from 'drizzle-orm';
 import bcryptjs from 'bcryptjs';
+import { syncService } from '../sync/sync.service.js';
 export class SettingsError extends Error {
     statusCode;
     code;
@@ -180,6 +181,7 @@ export class SettingsService {
             resultRow = created;
         }
         this.cachedCompanySettings = null;
+        syncService.bump('settings');
         return this.formatCompanySettings(resultRow);
     }
     /**

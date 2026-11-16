@@ -91,3 +91,28 @@ export interface LeadQueryParams {
   sortBy?: 'createdAt' | 'name' | 'workflowStep' | 'status';
   sortOrder?: 'asc' | 'desc';
 }
+
+export interface BulkImportLeadItemInput {
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  productType?: ProductType;
+  dimensionsInquiry?: string | null;
+  source?: string;
+  status?: LeadStatus;
+  workflowStep?: number;
+  assignedToUserId?: string;
+  assignee?: string;
+  assignedTo?: string;
+  notes?: string | null;
+}
+
+export interface BulkImportResult {
+  importedCount: number;
+  skippedCount: number;
+  total: number;
+  leads: LeadListItem[];
+  errors: { index: number; name?: string; error: string }[];
+}

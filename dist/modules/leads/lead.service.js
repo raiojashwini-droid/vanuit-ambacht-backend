@@ -2,6 +2,7 @@ import { eq, or, ilike, sql, desc, asc, and, inArray } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { leads, leadVoiceNotes, commercialActions, tasks, customers, users, partnerPriceRequests, partnerOffers, quotes, } from '../../db/schema.js';
 import { customerService } from '../customers/customer.service.js';
+import { syncService } from '../sync/sync.service.js';
 export class LeadError extends Error {
     statusCode;
     code;
@@ -352,7 +353,7 @@ export class LeadService {
                 note: notes,
             });
         }
-        return {
+        const result = {
             id: created.id,
             leadNumber: created.leadNumber,
             customerId: created.customerId,
@@ -374,6 +375,95 @@ export class LeadService {
             intakeNotes: notes || null,
             createdAt: created.createdAt.toISOString(),
             updatedAt: created.updatedAt.toISOString(),
+        };
+        syncService.bump('leads');
+        return result;
+    }
+    /**
+     * Bulk import leads from CSV / spreadsheet
+     */
+    async bulkImport(items, currentUserId) {
+        const results = [];
+        const errors = [];
+        let skippedCount = 0;
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            try {
+                if (!item.name || !item.name.trim()) {
+                    skippedCount++;
+                    errors.push({ index: i, name: item.name, error: 'Name is required' });
+                    continue;
+                }
+                const leadNumber = await this.generateLeadNumber();
+                const assignedUserId = await this.resolveAssigneeUserId(item.assignedToUserId, item.assignee || item.assignedTo, currentUserId);
+                const [assignedUser] = await db
+                    .select({ id: users.id, fullName: users.fullName })
+                    .from(users)
+                    .where(eq(users.id, assignedUserId))
+                    .limit(1);
+                const [created] = await db
+                    .insert(leads)
+                    .values({
+                    leadNumber,
+                    name: item.name.trim(),
+                    email: item.email?.toLowerCase() || null,
+                    phone: item.phone || null,
+                    address: item.address || null,
+                    city: item.city || null,
+                    productType: item.productType || 'outdoor_kitchen',
+                    dimensionsInquiry: item.dimensionsInquiry || null,
+                    source: item.source || 'CSV Import',
+                    status: item.status || 'new',
+                    workflowStep: item.workflowStep || 1,
+                    assignedToUserId: assignedUserId,
+                })
+                    .returning();
+                if (item.notes) {
+                    await db.insert(commercialActions).values({
+                        leadId: created.id,
+                        createdByUserId: currentUserId,
+                        actionType: 'intake_note',
+                        note: item.notes,
+                    });
+                }
+                results.push({
+                    id: created.id,
+                    leadNumber: created.leadNumber,
+                    customerId: created.customerId,
+                    name: created.name,
+                    email: created.email,
+                    phone: created.phone,
+                    address: created.address,
+                    city: created.city,
+                    productType: created.productType,
+                    dimensionsInquiry: created.dimensionsInquiry,
+                    source: created.source,
+                    status: created.status,
+                    workflowStep: created.workflowStep,
+                    assignedToUserId: created.assignedToUserId,
+                    assignedToName: assignedUser?.fullName,
+                    assignedTo: assignedUser?.fullName,
+                    lostReason: created.lostReason,
+                    notes: item.notes || null,
+                    intakeNotes: item.notes || null,
+                    createdAt: created.createdAt.toISOString(),
+                    updatedAt: created.updatedAt.toISOString(),
+                });
+            }
+            catch (err) {
+                skippedCount++;
+                errors.push({ index: i, name: item.name, error: err.message || 'Failed to insert lead' });
+            }
+        }
+        if (results.length > 0) {
+            syncService.bump('leads');
+        }
+        return {
+            importedCount: results.length,
+            skippedCount,
+            total: items.length,
+            leads: results,
+            errors,
         };
     }
     /**
@@ -438,6 +528,7 @@ export class LeadService {
             .from(commercialActions)
             .where(and(eq(commercialActions.leadId, id), eq(commercialActions.actionType, 'intake_note')))
             .limit(1);
+        syncService.bump('leads');
         return {
             id: updated.id,
             leadNumber: updated.leadNumber,
@@ -501,6 +592,7 @@ export class LeadService {
         })
             .where(eq(leads.id, id))
             .returning();
+        syncService.bump('leads');
         return {
             id: updated.id,
             leadNumber: updated.leadNumber,
@@ -538,6 +630,7 @@ export class LeadService {
         })
             .where(eq(leads.id, id))
             .returning();
+        syncService.bump('leads');
         return {
             id: updated.id,
             leadNumber: updated.leadNumber,
@@ -832,6 +925,7 @@ export class LeadService {
             // 4. Finally delete the lead
             await tx.delete(leads).where(eq(leads.id, id));
         });
+        syncService.bump('leads');
         return {
             deleted: true,
             leadNumber: existing.leadNumber,

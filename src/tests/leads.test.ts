@@ -571,6 +571,61 @@ async function runTests() {
   record('Deleted lead no longer retrievable (404 Not Found)', verifyDeleteRes.statusCode === 404);
 
   // ---------------------------------------------------------
+  // 12. BULK IMPORT & REAL-TIME SYNC STATUS
+  // ---------------------------------------------------------
+  console.log('\n--- 12. Testing Bulk Import & Sync Status ---');
+
+  // 12.1 POST /api/leads/bulk-import imports multiple leads atomically
+  const bulkRes = await server.inject({
+    method: 'POST',
+    url: '/api/leads/bulk-import',
+    headers: { cookie: adminCookie },
+    payload: {
+      leads: [
+        {
+          name: 'Bulk Customer 1',
+          email: 'bulk1@example.com',
+          phone: '+31611112222',
+          productType: 'outdoor_kitchen',
+          source: 'CSV Import',
+        },
+        {
+          name: 'Bulk Customer 2',
+          email: '', // Empty email should transform cleanly to null
+          phone: '-', // Dash phone should transform cleanly to null
+          productType: 'garden_room',
+          source: 'CSV Import',
+        },
+      ],
+    },
+  });
+  const bulkBody = JSON.parse(bulkRes.body);
+  record(
+    'POST /api/leads/bulk-import imports array of leads successfully',
+    bulkRes.statusCode === 201 &&
+      bulkBody.success === true &&
+      bulkBody.data?.importedCount === 2 &&
+      bulkBody.data?.leads?.length === 2,
+    `Imported: ${bulkBody.data?.importedCount}`
+  );
+
+  // 12.2 GET /api/sync/status returns updated version & entity timestamps
+  const syncRes = await server.inject({
+    method: 'GET',
+    url: '/api/sync/status',
+    headers: { cookie: adminCookie },
+  });
+  const syncBody = JSON.parse(syncRes.body);
+  record(
+    'GET /api/sync/status returns active sync status with lead mutation timestamp',
+    syncRes.statusCode === 200 &&
+      syncBody.success === true &&
+      typeof syncBody.data?.version === 'number' &&
+      typeof syncBody.data?.entities?.leads === 'number',
+    `Sync Version: ${syncBody.data?.version}`
+  );
+
+  // ---------------------------------------------------------
   // SUMMARY
   // ---------------------------------------------------------
   console.log('\n======================================================');

@@ -5,6 +5,7 @@ import { storageService } from '../../services/storage.service.js';
 import { projectPdfService } from './project-pdf.service.js';
 import { projectMilestoneService } from './project-milestone.service.js';
 import { projectPhotoService } from './project-photo.service.js';
+import { syncService } from '../sync/sync.service.js';
 export class ProjectError extends Error {
     statusCode;
     code;
@@ -506,6 +507,7 @@ export class ProjectService {
             return newProject.id;
         });
         // Called AFTER the transaction commits so the committed row is visible
+        syncService.bump('projects');
         return (await this.getById(newProjectId, user));
     }
     /**
@@ -545,6 +547,7 @@ export class ProjectService {
             updateValues.technicalSpecs = { ...(existing.technicalSpecs || {}), ...data.technicalSpecs };
         }
         await db.update(projects).set(updateValues).where(eq(projects.id, id));
+        syncService.bump('projects');
         return (await this.getById(id, user));
     }
     /**
@@ -641,6 +644,7 @@ export class ProjectService {
         currentSpecs.productionStep = nextStep;
         updateValues.technicalSpecs = currentSpecs;
         await db.update(projects).set(updateValues).where(eq(projects.id, id));
+        syncService.bump('projects');
         return (await this.getById(id, user));
     }
     /**

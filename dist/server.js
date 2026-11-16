@@ -27,6 +27,7 @@ import { reportsRoutes } from './modules/reports/reports.routes.js';
 import { partnerDashboardRoutes } from './modules/partner/partner-dashboard.routes.js';
 import { profileRoutes } from './modules/users/profile.routes.js';
 import { partnerCandidateRoutes } from './modules/partner-candidates/candidate.routes.js';
+import { syncRoutes } from './modules/sync/sync.routes.js';
 dotenv.config();
 const server = Fastify({
     logger: {
@@ -91,6 +92,7 @@ await server.register(photoRoutes, { prefix: '/api/photos' });
 await server.register(reportsRoutes, { prefix: '/api/reports' });
 await server.register(partnerDashboardRoutes, { prefix: '/api/partner' });
 await server.register(profileRoutes, { prefix: '/api/users/profile' });
+await server.register(syncRoutes, { prefix: '/api/sync' });
 const PORT = Number(process.env.PORT) || 3001;
 export async function start() {
     try {

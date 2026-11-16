@@ -2,6 +2,7 @@ import { db } from '../../db/index.js';
 import { companySettings, users, partners, customers } from '../../db/schema.js';
 import { eq, and, ne, desc, asc, count, ilike } from 'drizzle-orm';
 import bcryptjs from 'bcryptjs';
+import { syncService } from '../sync/sync.service.js';
 import type {
   CompanySettingsDto,
   UpdateCompanySettingsDto,
@@ -173,6 +174,7 @@ export class SettingsService {
     }
 
     this.cachedCompanySettings = null;
+    syncService.bump('settings');
     return this.formatCompanySettings(resultRow);
   }
 

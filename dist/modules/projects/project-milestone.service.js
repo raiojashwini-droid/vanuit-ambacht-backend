@@ -1,6 +1,7 @@
 import { db } from '../../db/index.js';
 import { projectMilestones, projects } from '../../db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
+import { syncService } from '../sync/sync.service.js';
 export class MilestoneError extends Error {
     statusCode;
     code;
@@ -89,6 +90,7 @@ export class ProjectMilestoneService {
             verifiedByUserId: user.sub,
         })
             .returning();
+        syncService.bump('projects');
         return this.mapToDto(created);
     }
     /**
@@ -133,6 +135,7 @@ export class ProjectMilestoneService {
             .set(updateValues)
             .where(eq(projectMilestones.id, milestoneId))
             .returning();
+        syncService.bump('projects');
         return this.mapToDto(updated);
     }
     /**
@@ -153,6 +156,7 @@ export class ProjectMilestoneService {
             throw new MilestoneError('Billing-linked milestone is protected and cannot be deleted because it is tied to invoice instalment schedules.', 400, 'CANNOT_DELETE_BILLING_MILESTONE');
         }
         await db.delete(projectMilestones).where(eq(projectMilestones.id, milestoneId));
+        syncService.bump('projects');
         return { success: true };
     }
 }

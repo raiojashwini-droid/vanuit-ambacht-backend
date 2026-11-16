@@ -2,6 +2,7 @@ import { eq, and, or, ilike, sql, desc, asc, inArray } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { db } from '../../db/index.js';
 import { quotes, quoteVersions, quoteItems, customers, leads, partnerOffers, partnerPriceRequests, projects, projectMilestones, invoices, invoiceItems, commercialActions, users, companySettings, } from '../../db/schema.js';
+import { syncService } from '../sync/sync.service.js';
 import { quotePdfService } from './quote-pdf.service.js';
 export class QuoteError extends Error {
     statusCode;
@@ -552,7 +553,9 @@ export class QuoteService {
                 });
             }
             const activeVersion = this.mapVersionToDto(v1, totals.processedItems);
-            return this.mapQuoteToDto(newQuote, { lead: leadRecord, activeVersion, versions: [activeVersion] });
+            const resDto = this.mapQuoteToDto(newQuote, { lead: leadRecord, activeVersion, versions: [activeVersion] });
+            syncService.bump('quotes');
+            return resDto;
         });
     }
     /**
@@ -579,6 +582,7 @@ export class QuoteService {
         if (input.leadId !== undefined)
             updateData.leadId = input.leadId;
         await db.update(quotes).set(updateData).where(eq(quotes.id, existing.id));
+        syncService.bump('quotes');
         return await this.getById(existing.id, { sub: adminUserId, role: 'admin', email: '', fullName: '' });
     }
     /**
@@ -715,6 +719,7 @@ export class QuoteService {
             // Update quote timestamp
             await tx.update(quotes).set({ updatedAt: new Date() }).where(eq(quotes.id, quote.id));
         });
+        syncService.bump('quotes');
         return await this.getById(quote.id, { sub: adminUserId, role: 'admin', email: '', fullName: '' });
     }
     /**
@@ -774,6 +779,7 @@ export class QuoteService {
                 }
             }
         });
+        syncService.bump('quotes');
         return await this.getById(quote.id, { sub: adminUserId, role: 'admin', email: '', fullName: '' });
     }
     /**

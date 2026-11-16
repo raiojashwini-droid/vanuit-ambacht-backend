@@ -3,6 +3,7 @@ import { projectMilestones, projects, invoices } from '../../db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
 import type { ProjectMilestoneDto, MilestoneStatus } from './project.types.js';
 import type { JwtTokenPayload } from '../../types/auth.types.js';
+import { syncService } from '../sync/sync.service.js';
 
 export class MilestoneError extends Error {
   statusCode: number;
@@ -117,6 +118,7 @@ export class ProjectMilestoneService {
       })
       .returning();
 
+    syncService.bump('projects');
     return this.mapToDto(created);
   }
 
@@ -174,6 +176,7 @@ export class ProjectMilestoneService {
       .where(eq(projectMilestones.id, milestoneId))
       .returning();
 
+    syncService.bump('projects');
     return this.mapToDto(updated);
   }
 
@@ -202,6 +205,7 @@ export class ProjectMilestoneService {
     }
 
     await db.delete(projectMilestones).where(eq(projectMilestones.id, milestoneId));
+    syncService.bump('projects');
     return { success: true };
   }
 }

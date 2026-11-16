@@ -2,6 +2,7 @@ import { db } from '../../db/index.js';
 import { invoices, invoiceItems, payments, projects, customers, projectMilestones, leads, companySettings, } from '../../db/schema.js';
 import { eq, and, desc, asc, ilike, sql, or, inArray } from 'drizzle-orm';
 import { accountingService } from '../accounting/accounting.service.js';
+import { syncService } from '../sync/sync.service.js';
 export class InvoiceError extends Error {
     statusCode;
     code;
@@ -456,6 +457,7 @@ export class InvoiceService {
             }
             return newInv.id;
         });
+        syncService.bump('invoices');
         return await this.getById(createdInvoiceId, user);
     }
     /**
@@ -526,6 +528,7 @@ export class InvoiceService {
             }
             await tx.update(invoices).set(updatePayload).where(eq(invoices.id, id));
         });
+        syncService.bump('invoices');
         return await this.getById(id, user);
     }
     /**
@@ -562,6 +565,7 @@ export class InvoiceService {
             await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, id));
             await tx.delete(invoices).where(eq(invoices.id, id));
         });
+        syncService.bump('invoices');
         return {
             success: true,
             message: `Invoice ${existing.invoiceNumber} deleted successfully.`,
@@ -617,6 +621,7 @@ export class InvoiceService {
             // MODULE 8 HOOK: Post balanced double-entry for SENT sales invoice
             await accountingService.postSalesInvoiceEntry(id, tx);
         });
+        syncService.bump('invoices');
         return await this.getById(id, user);
     }
     /**
@@ -693,6 +698,7 @@ export class InvoiceService {
                 await accountingService.postPaymentReceiptEntry(insertedPay.id, tx);
             }
         });
+        syncService.bump('invoices');
         return await this.getById(id, user);
     }
     /**
