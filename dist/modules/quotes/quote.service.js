@@ -1,7 +1,7 @@
 import { eq, and, or, ilike, sql, desc, asc, inArray } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { db } from '../../db/index.js';
-import { quotes, quoteVersions, quoteItems, customers, leads, projects, invoices, invoiceItems, commercialActions, users, companySettings, } from '../../db/schema.js';
+import { quotes, quoteVersions, quoteItems, customers, leads, partnerOffers, partnerPriceRequests, projects, projectMilestones, invoices, invoiceItems, commercialActions, users, companySettings, } from '../../db/schema.js';
 import { quotePdfService } from './quote-pdf.service.js';
 export class QuoteError extends Error {
     statusCode;
@@ -986,9 +986,55 @@ export class QuoteService {
                 customerId = fallbackCust.id;
                 await tx.update(quotes).set({ customerId }).where(eq(quotes.id, realQuoteId));
             }
-            // 4. Create Project with status = 'in_progress' and orderStatus = 'in_voorbereiding'
+            // 4. Create Project with full canonical specs snapshot, partner linking, and milestones
             const projectNumber = await this.generateProjectNumber(0, tx);
             const productCategory = approvedQuote.productType.includes('garden') ? 'garden_room' : 'outdoor_kitchen';
+            // 4a. Resolve partner from accepted offer or original partner request
+            let resolvedPartnerId = null;
+            if (approvedQuote.acceptedPartnerOfferId) {
+                const [offer] = await tx
+                    .select({ partnerId: partnerOffers.partnerId })
+                    .from(partnerOffers)
+                    .where(eq(partnerOffers.id, approvedQuote.acceptedPartnerOfferId))
+                    .limit(1);
+                if (offer)
+                    resolvedPartnerId = offer.partnerId;
+            }
+            if (!resolvedPartnerId && approvedQuote.leadId) {
+                const [ppr] = await tx
+                    .select({ partnerId: partnerPriceRequests.partnerId })
+                    .from(partnerPriceRequests)
+                    .where(eq(partnerPriceRequests.leadId, approvedQuote.leadId))
+                    .limit(1);
+                if (ppr)
+                    resolvedPartnerId = ppr.partnerId;
+            }
+            // 4b. Fetch quote items to include in technical specifications snapshot
+            const versionItems = await tx
+                .select()
+                .from(quoteItems)
+                .where(eq(quoteItems.quoteVersionId, currentV.id));
+            const canonicalSpecs = {
+                productType: approvedQuote.productType,
+                dimensionsText: currentV.dimensionsText || '240 × 80 cm',
+                woodType: currentV.woodType || 'Thermo Fraké',
+                woodLifespan: currentV.woodLifespan || '20 tot 25 jaar',
+                finishTreatment: currentV.finishTreatment || '2 lagen naturel UV-beschermende olie',
+                optionsTitle: currentV.optionsTitle,
+                optionsSubtext: currentV.optionsSubtext,
+                deliveryTimeText: currentV.deliveryTimeText,
+                specificationsOverview: currentV.specificationsOverview,
+                optionsConfig: currentV.optionsConfig,
+                diagramConfig: currentV.diagramConfig,
+                infoboxConfig: currentV.infoboxConfig,
+                items: versionItems,
+                productionStep: 1,
+                statusTexts: {
+                    watErNuGebeurt: 'De voorbereiding en bestellingen zijn in volle gang.',
+                    watErHiernaKomt: 'Aanvang meubelmakerswerkplaats & assemblage.',
+                    leverweek: currentV.deliveryTimeText || 'In overleg te bepalen',
+                },
+            };
             const [newProject] = await tx
                 .insert(projects)
                 .values({
@@ -996,6 +1042,7 @@ export class QuoteService {
                 quoteId: approvedQuote.id,
                 quoteVersionId: currentV.id,
                 customerId: customerId,
+                partnerId: resolvedPartnerId,
                 projectType: productCategory,
                 name: `${approvedQuote.productType} — ${fullQuote.customerName || 'Maatwerk'}`,
                 status: 'in_progress',
@@ -1004,8 +1051,59 @@ export class QuoteService {
                 agreedBuildPrice: currentV.costPrice != null ? sql `${currentV.costPrice}::numeric` : null,
                 deliveryAddress: fullQuote.customerAddress || 'Op locatie',
                 city: fullQuote.customerCity || 'Nederland',
+                technicalSpecs: canonicalSpecs,
             })
                 .returning();
+            // 4c. Generate standard milestones for the project
+            const defaultMilestones = [
+                {
+                    milestoneCode: 'M1',
+                    title: 'Opdrachtbevestiging & Werkvoorbereiding',
+                    description: 'Constructietekeningen en technische controle afgerond',
+                    sequenceOrder: 1,
+                    status: 'completed',
+                    completedAt: new Date(),
+                },
+                {
+                    milestoneCode: 'M2',
+                    title: 'Houtselectie & Framebouw',
+                    description: 'Selectie van duurzaam kwaliteitshout en machinale bewerking in werkplaats',
+                    sequenceOrder: 2,
+                    status: 'in_progress',
+                },
+                {
+                    milestoneCode: 'M3',
+                    title: 'Afwerking & Kwaliteitscontrole',
+                    description: 'Aanbrengen beschermende olie/lak en kwaliteitskeuring door Tim & Bram',
+                    sequenceOrder: 3,
+                    status: 'pending',
+                },
+                {
+                    milestoneCode: 'M4',
+                    title: 'Gereed voor Levering',
+                    description: 'Verpakken gereed meubel en gereedmaken voor speciaal transport',
+                    sequenceOrder: 4,
+                    status: 'pending',
+                },
+                {
+                    milestoneCode: 'M5',
+                    title: 'Plaatsing & Oplevering',
+                    description: 'Vakkundige montage op locatie, afstemming en overdracht aan klant',
+                    sequenceOrder: 5,
+                    status: 'pending',
+                },
+            ];
+            for (const m of defaultMilestones) {
+                await tx.insert(projectMilestones).values({
+                    projectId: newProject.id,
+                    milestoneCode: m.milestoneCode,
+                    title: m.title,
+                    description: m.description,
+                    sequenceOrder: m.sequenceOrder,
+                    status: m.status,
+                    completedAt: m.completedAt || null,
+                });
+            }
             // 5. Create Invoices: 40/40/20 for Garden Rooms, 50/50 for Outdoor Kitchens
             const today = new Date().toISOString().split('T')[0];
             const due14 = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
