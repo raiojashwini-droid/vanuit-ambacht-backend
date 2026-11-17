@@ -132,7 +132,7 @@ export class InvoicePdfService {
     // Fetch authoritative company settings from DB
     const [compSettings] = await db.select().from(companySettings).limit(1);
 
-    const compName = compSettings?.companyName || 'Vanuit Ambacht B.V.';
+    const compName = compSettings?.companyName?.replace(/\s*(?:Meesters\s*)?B\.V\.?/i, '').trim() || 'Vanuit Ambacht';
     const compAddress = compSettings?.address
       ? `${compSettings.address}, ${compSettings.postalCode || ''} ${compSettings.city || 'Vleuten'}`
       : 'Koningshof 33, 3451 LM Vleuten';

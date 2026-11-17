@@ -83,7 +83,7 @@ export class SettingsService {
       const [created] = await db
         .insert(companySettings)
         .values({
-          companyName: 'Vanuit Ambacht B.V.',
+          companyName: 'Vanuit Ambacht',
           website: 'www.vanuitambacht.nl',
           kvkNumber: 'KVK-88741029',
           btwNumber: 'NL88741029B01',
@@ -166,7 +166,7 @@ export class SettingsService {
       const [created] = await db
         .insert(companySettings)
         .values({
-          companyName: input.companyName || 'Vanuit Ambacht B.V.',
+          companyName: input.companyName || 'Vanuit Ambacht',
           ...updateData,
         })
         .returning();

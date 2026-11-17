@@ -703,7 +703,7 @@ export const messages = pgTable('messages', {
 // ==========================================
 export const companySettings = pgTable('company_settings', {
   id: uuid('id').defaultRandom().primaryKey(),
-  companyName: varchar('company_name', { length: 150 }).default('Vanuit Ambacht B.V.').notNull(),
+  companyName: varchar('company_name', { length: 150 }).default('Vanuit Ambacht').notNull(),
   website: varchar('website', { length: 255 }),
   kvkNumber: varchar('kvk_number', { length: 50 }),
   btwNumber: varchar('btw_number', { length: 50 }),
