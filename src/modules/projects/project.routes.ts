@@ -25,7 +25,7 @@ import {
 } from './project.schema.js';
 
 const projectIdParamSchema = z.object({
-  id: z.string().uuid('Invalid project UUID'),
+  id: z.string().min(1, 'Project ID is required'),
 });
 
 const milestoneIdParamSchema = z.object({

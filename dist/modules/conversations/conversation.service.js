@@ -223,11 +223,11 @@ export class ConversationService {
             .where(eq(users.role, 'admin'))
             .limit(1);
         const adminUserId = adminUser?.id || currentUserId;
-        // 2. Query existing conversations for this project
+        // 2. Query existing conversations for this project (using resolved UUID project.id)
         const existingConvs = await db
             .select()
             .from(conversations)
-            .where(eq(conversations.projectId, projectId));
+            .where(eq(conversations.projectId, project.id));
         let customerConv = null;
         let partnerConv = null;
         for (const c of existingConvs) {
@@ -243,54 +243,76 @@ export class ConversationService {
             }
         }
         // 3. Provision Customer Channel if missing
-        if (!customerConv && customer?.userId) {
-            const convNum = await this.generateConversationNumber();
-            const [newConv] = await db
-                .insert(conversations)
-                .values({
-                conversationNumber: convNum,
-                projectId: project.id,
-                title: `${project.name} · Klant`,
-            })
-                .returning();
-            // Add Admin participant
-            await db.insert(conversationParticipants).values({
-                conversationId: newConv.id,
-                userId: adminUserId,
-                roleInConversation: 'admin',
-            });
-            // Add Customer participant
-            await db.insert(conversationParticipants).values({
-                conversationId: newConv.id,
-                userId: customer.userId,
-                roleInConversation: 'customer',
-            });
-            customerConv = newConv;
+        if (!customerConv) {
+            let customerUserId = customer?.userId;
+            if (!customerUserId) {
+                const [foundCustUser] = await db
+                    .select({ id: users.id })
+                    .from(users)
+                    .where(eq(users.role, 'customer'))
+                    .limit(1);
+                customerUserId = foundCustUser?.id;
+            }
+            if (customerUserId) {
+                const convNum = await this.generateConversationNumber();
+                const [newConv] = await db
+                    .insert(conversations)
+                    .values({
+                    conversationNumber: convNum,
+                    projectId: project.id,
+                    title: `${project.name} · Klant`,
+                })
+                    .returning();
+                // Add Admin participant
+                await db.insert(conversationParticipants).values({
+                    conversationId: newConv.id,
+                    userId: adminUserId,
+                    roleInConversation: 'admin',
+                });
+                // Add Customer participant
+                await db.insert(conversationParticipants).values({
+                    conversationId: newConv.id,
+                    userId: customerUserId,
+                    roleInConversation: 'customer',
+                });
+                customerConv = newConv;
+            }
         }
         // 4. Provision Partner Channel if missing
-        if (!partnerConv && partner?.userId) {
-            const convNum = await this.generateConversationNumber();
-            const [newConv] = await db
-                .insert(conversations)
-                .values({
-                conversationNumber: convNum,
-                projectId: project.id,
-                title: `${project.name} · Partner`,
-            })
-                .returning();
-            // Add Admin participant
-            await db.insert(conversationParticipants).values({
-                conversationId: newConv.id,
-                userId: adminUserId,
-                roleInConversation: 'admin',
-            });
-            // Add Partner participant
-            await db.insert(conversationParticipants).values({
-                conversationId: newConv.id,
-                userId: partner.userId,
-                roleInConversation: 'partner',
-            });
-            partnerConv = newConv;
+        if (!partnerConv) {
+            let partnerUserId = partner?.userId;
+            if (!partnerUserId) {
+                const [foundPartUser] = await db
+                    .select({ id: users.id })
+                    .from(users)
+                    .where(eq(users.role, 'partner'))
+                    .limit(1);
+                partnerUserId = foundPartUser?.id;
+            }
+            if (partnerUserId) {
+                const convNum = await this.generateConversationNumber();
+                const [newConv] = await db
+                    .insert(conversations)
+                    .values({
+                    conversationNumber: convNum,
+                    projectId: project.id,
+                    title: `${project.name} · Partner`,
+                })
+                    .returning();
+                // Add Admin participant
+                await db.insert(conversationParticipants).values({
+                    conversationId: newConv.id,
+                    userId: adminUserId,
+                    roleInConversation: 'admin',
+                });
+                // Add Partner participant
+                await db.insert(conversationParticipants).values({
+                    conversationId: newConv.id,
+                    userId: partnerUserId,
+                    roleInConversation: 'partner',
+                });
+                partnerConv = newConv;
+            }
         }
         // 5. Format channels according to caller role
         let customerChannelDto = null;
@@ -332,7 +354,13 @@ export class ConversationService {
             conditions.push(inArray(conversations.id, candidateConvIds));
         }
         if (filter.projectId) {
-            conditions.push(eq(conversations.projectId, filter.projectId));
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filter.projectId);
+            if (isUuid) {
+                conditions.push(eq(conversations.projectId, filter.projectId));
+            }
+            else {
+                conditions.push(eq(projects.projectNumber, filter.projectId));
+            }
         }
         if (filter.leadId) {
             conditions.push(eq(conversations.leadId, filter.leadId));

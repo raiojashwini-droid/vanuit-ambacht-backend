@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js';
 import { companySettings, users, partners, customers } from '../../db/schema.js';
-import { eq, and, ne, desc, asc, count, ilike } from 'drizzle-orm';
+import { eq, and, ne, desc, asc, count, ilike, sql } from 'drizzle-orm';
 import bcryptjs from 'bcryptjs';
 import { syncService } from '../sync/sync.service.js';
 import type {
@@ -85,20 +85,20 @@ export class SettingsService {
         .values({
           companyName: 'Vanuit Ambacht',
           website: 'www.vanuitambacht.nl',
-          kvkNumber: 'KVK-88741029',
-          btwNumber: 'NL88741029B01',
-          iban: 'NL91 ABNA 0417 1234 56',
+          kvkNumber: '93097429',
+          btwNumber: 'NL866264863B01',
+          iban: 'NL27 ABNA 0132 2698 56',
           bankName: 'ABN AMRO Bank',
           email: 'info@vanuitambacht.nl',
-          phone: '+31 6 12345678',
-          address: 'Herengracht 1',
-          postalCode: '1015 BG',
-          city: 'Amsterdam',
-          country: 'NL',
+          phone: '06 82 00 80 25',
+          address: 'Koningshof 33',
+          postalCode: '3451 LM',
+          city: 'Vleuten',
+          country: 'Nederland',
           standardVatRate: '21.00',
           lowVatRate: '9.00',
-          quotePrefix: '#Q-2004',
-          invoicePrefix: '#INV-902',
+          quotePrefix: '#Q-2026',
+          invoicePrefix: '#INV-2026',
           defaultMarginPercentage: '35.00',
         })
         .returning();
@@ -575,6 +575,74 @@ export class SettingsService {
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Complete transactional cleanup: wipes all test/demo business data across all modules
+   * Preserves core system admin accounts (admin@, tim@, bram@, partner@), companySettings, and chart of accounts.
+   */
+  async wipeAllTransactionalData(): Promise<{ success: boolean; clearedTables: string[] }> {
+    const transactionalTables = [
+      'messages',
+      'conversation_participants',
+      'conversations',
+      'documents',
+      'commercial_actions',
+      'tasks',
+      'journal_entry_lines',
+      'journal_entries',
+      'payment_allocations',
+      'payments',
+      'payment_webhooks',
+      'bank_transactions',
+      'bank_statements',
+      'invoice_items',
+      'invoices',
+      'planning_events',
+      'project_photos',
+      'project_milestones',
+      'projects',
+      'quote_items',
+      'quote_versions',
+      'quotes',
+      'partner_offers',
+      'partner_price_requests',
+      'lead_voice_notes',
+      'leads',
+      'vat_filings',
+      'partner_candidates',
+      'customers',
+    ];
+
+    const cleared: string[] = [];
+    for (const table of transactionalTables) {
+      try {
+        await db.execute(sql.raw(`TRUNCATE TABLE ${table} CASCADE;`));
+        cleared.push(table);
+      } catch (err: any) {
+        console.warn(`Could not truncate ${table}:`, err.message);
+      }
+    }
+
+    try {
+      const keepEmails = [
+        'admin@vanuitambacht.nl',
+        'tim@vanuitambacht.nl',
+        'bram@vanuitambacht.nl',
+        'partner@vanuitambacht.nl',
+      ];
+      const emailList = keepEmails.map((e) => `'${e}'`).join(', ');
+      await db.execute(sql.raw(`DELETE FROM users WHERE email NOT IN (${emailList});`));
+    } catch (err: any) {
+      console.warn('Could not clean test users:', err.message);
+    }
+
+    syncService.bump('leads');
+    syncService.bump('quotes');
+    syncService.bump('projects');
+    syncService.bump('invoices');
+
+    return { success: true, clearedTables: cleared };
   }
 }
 

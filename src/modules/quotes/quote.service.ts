@@ -59,13 +59,7 @@ export class QuoteService {
    */
   async generateQuoteNumber(): Promise<string> {
     const year = new Date().getFullYear();
-    const [comp] = await db.select({ quotePrefix: companySettings.quotePrefix }).from(companySettings).limit(1);
-    let rawPrefix = comp?.quotePrefix?.trim() || `OF-${year}`;
-    rawPrefix = rawPrefix.replace(/^#/, '');
-    if (rawPrefix.startsWith('Q') || !rawPrefix.includes(`${year}`)) {
-      rawPrefix = `OF-${year}`;
-    }
-    const prefix = rawPrefix.endsWith('-') ? rawPrefix : `${rawPrefix}-`;
+    const prefix = `OF-${year}`; // Brief 2.4 format: OF-{year}{seq} (e.g. OF-2026001)
 
     const [latest] = await db
       .select({ quoteNumber: quotes.quoteNumber })
@@ -78,7 +72,8 @@ export class QuoteService {
       return `${prefix}001`;
     }
 
-    const currentNumber = parseInt(latest.quoteNumber.replace(prefix, ''), 10);
+    const stripped = latest.quoteNumber.replace(prefix, '').replace(/^-/, '');
+    const currentNumber = parseInt(stripped, 10);
     const nextSeq = isNaN(currentNumber) ? 1 : currentNumber + 1;
     return `${prefix}${nextSeq.toString().padStart(3, '0')}`;
   }
@@ -103,14 +98,11 @@ export class QuoteService {
   }
 
   /**
-   * Generates unique sequential invoice number based on company settings prefix
+   * Generates unique sequential invoice number based on company settings prefix: {year}{seq}
    */
   async generateInvoiceNumber(offset: number = 0, executor: any = db): Promise<string> {
     const year = new Date().getFullYear();
-    const [comp] = await executor.select({ invoicePrefix: companySettings.invoicePrefix }).from(companySettings).limit(1);
-    let rawPrefix = comp?.invoicePrefix?.trim() || `INV-${year}`;
-    rawPrefix = rawPrefix.replace(/^#/, '');
-    const prefix = rawPrefix.endsWith('-') ? rawPrefix : `${rawPrefix}-`;
+    const prefix = `${year}`; // Brief 2.4 format: {year}{seq} (e.g. 2026001)
 
     const [latest] = await executor
       .select({ invoiceNumber: invoices.invoiceNumber })
@@ -119,7 +111,8 @@ export class QuoteService {
       .orderBy(desc(invoices.invoiceNumber))
       .limit(1);
 
-    const baseSeq = latest ? parseInt(latest.invoiceNumber.replace(prefix, ''), 10) || 0 : 0;
+    const stripped = latest ? latest.invoiceNumber.replace(/^INV-/, '').replace(prefix, '').replace(/^-/, '') : '';
+    const baseSeq = stripped ? parseInt(stripped, 10) || 0 : 0;
     const nextSeq = baseSeq + 1 + offset;
     return `${prefix}${nextSeq.toString().padStart(3, '0')}`;
   }
@@ -235,11 +228,14 @@ export class QuoteService {
     const c = extra?.customer;
     const l = extra?.lead;
 
+    const optCust = (extra?.activeVersion as any)?.optionsConfig?.customerInfo;
     const customerName = c
       ? `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.companyName
       : l
       ? l.name
-      : null;
+      : optCust?.name
+      ? optCust.name
+      : 'Klant';
 
     return {
       id: quote.id,
@@ -1020,11 +1016,10 @@ export class QuoteService {
       throw new QuoteError('Quote not found', 404, 'NOT_FOUND');
     }
 
-    if (quote.status === 'approved') {
-      throw new QuoteError('Cannot delete an approved quote with active project associations', 400, 'QUOTE_ALREADY_APPROVED');
-    }
-
     await db.transaction(async (tx) => {
+      // Unlink any project referencing this quote
+      await tx.update(projects).set({ quoteId: null }).where(eq(projects.quoteId, quoteId));
+
       // Find all versions
       const versions = await tx.select({ id: quoteVersions.id }).from(quoteVersions).where(eq(quoteVersions.quoteId, quoteId));
       const vIds = versions.map((v) => v.id);
@@ -1199,6 +1194,11 @@ export class QuoteService {
         },
       };
 
+      const productDisplayTitle = productCategory === 'garden_room' ? 'Buitenverblijf' : 'Buitenkeuken';
+      const dimensions = (currentV as any)?.dimensionsText || '';
+      const sizeNote = dimensions ? ` · ${dimensions}` : '';
+      const dynamicProjectTitle = `${fullQuote.customerName || 'Klant'} · ${productDisplayTitle}${sizeNote}`;
+
       const [newProject] = await tx
         .insert(projects)
         .values({
@@ -1208,7 +1208,7 @@ export class QuoteService {
           customerId: customerId!,
           partnerId: resolvedPartnerId,
           projectType: productCategory,
-          name: `${approvedQuote.productType} — ${fullQuote.customerName || 'Maatwerk'}`,
+          name: dynamicProjectTitle,
           status: 'in_progress',
           orderStatus: 'in_voorbereiding',
           contractValue: sql`${currentV.totalInclVat}::numeric`,

@@ -198,4 +198,24 @@ export const settingsRoutes = async (fastify) => {
             throw err;
         }
     });
+    /**
+     * 8. POST /api/settings/wipe-data
+     * Admin-only: wipe all transactional demo data for a fresh 00 start
+     */
+    fastify.post('/wipe-data', adminGuard, async (_request, reply) => {
+        try {
+            const result = await settingsService.wipeAllTransactionalData();
+            return reply.send({
+                success: true,
+                message: 'All transactional data wiped successfully. System is at 00.',
+                data: result,
+            });
+        }
+        catch (err) {
+            return reply.status(500).send({
+                success: false,
+                error: { code: 'WIPE_ERROR', message: err.message },
+            });
+        }
+    });
 };

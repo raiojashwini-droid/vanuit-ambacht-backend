@@ -77,16 +77,15 @@ export class DashboardService {
      */
     async getKpis(filter) {
         const { start, end, prevStart, prevEnd, label } = this.resolveDateRanges(filter);
-        // Current period counts
+        // Current period counts (Single Source of Truth from Leads and Quotes)
         const currentLeads = await db
-            .select({ id: leads.id })
+            .select({ id: leads.id, status: leads.status, workflowStep: leads.workflowStep })
             .from(leads)
             .where(and(gte(leads.createdAt, start), lte(leads.createdAt, end)));
         const currentQuotes = await db
             .select({ id: quotes.id, status: quotes.status })
             .from(quotes)
             .where(and(gte(quotes.createdAt, start), lte(quotes.createdAt, end)));
-        const currentApprovedQuotes = currentQuotes.filter((q) => q.status === 'approved');
         // Previous period counts for trend
         const prevLeads = await db
             .select({ id: leads.id })
@@ -103,16 +102,15 @@ export class DashboardService {
         }
         const trendStr = leadTrendPercent >= 0 ? `+${leadTrendPercent}% vs previous` : `${leadTrendPercent}% vs previous`;
         // Marketing Budget & Cost per Lead
-        // Standard baseline ad spend € 1,780 / month or from company settings
         const monthlyAdSpend = 1780;
         const daysInPeriod = Math.max(1, Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)));
         const periodAdSpend = Math.round((monthlyAdSpend / 30) * daysInPeriod);
         const costPerLeadVal = totalLeadsCount > 0 ? Number((periodAdSpend / totalLeadsCount).toFixed(2)) : 0;
-        // Quotes issued in current period
-        const quotesSentCount = currentQuotes.filter((q) => q.status !== 'draft').length;
+        // Single Source of Truth: Quotes Sent (Leads at Step >= 5 or Quotes sent)
+        const quotesSentCount = Math.max(currentQuotes.filter((q) => q.status !== 'draft').length, currentLeads.filter((l) => l.workflowStep >= 5 || l.status === 'quote_sent' || l.status === 'won').length);
         const quotePercentageVal = totalLeadsCount > 0 ? Number(((quotesSentCount / totalLeadsCount) * 100).toFixed(1)) : 0;
-        // Orders Won in current period
-        const ordersWonCount = currentApprovedQuotes.length;
+        // Single Source of Truth: Orders Won (Leads at Step >= 6 / Won or Quotes approved)
+        const ordersWonCount = Math.max(currentQuotes.filter((q) => q.status === 'approved').length, currentLeads.filter((l) => l.status === 'won' || l.workflowStep >= 6).length);
         const conversionRateVal = totalLeadsCount > 0
             ? Number(((ordersWonCount / totalLeadsCount) * 100).toFixed(1))
             : quotesSentCount > 0
@@ -256,8 +254,8 @@ export class DashboardService {
         const inDiscussionCount = periodLeads.filter((l) => l.workflowStep >= 2 || l.status === 'in_conversation' || l.status === 'price_requested' || l.status === 'price_received' || l.status === 'quote_sent' || l.status === 'won').length;
         // Stage 3: Quote Sent (workflowStep >= 5 or status = quote_sent / won)
         const quoteSentCount = periodLeads.filter((l) => l.workflowStep >= 5 || l.status === 'quote_sent' || l.status === 'won').length;
-        // Stage 4: Won (status = won or workflowStep >= 7)
-        const wonCount = periodLeads.filter((l) => l.status === 'won' || l.workflowStep >= 7).length;
+        // Stage 4: Won (status = won or workflowStep >= 6)
+        const wonCount = periodLeads.filter((l) => l.status === 'won' || l.workflowStep >= 6).length;
         const calcPct = (cnt) => (totalCount > 0 ? Math.round((cnt / totalCount) * 100) : 0);
         return {
             leads: {

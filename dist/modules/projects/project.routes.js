@@ -4,7 +4,7 @@ import { projectMilestoneService, MilestoneError } from './project-milestone.ser
 import { projectPhotoService, PhotoError } from './project-photo.service.js';
 import { projectListQuerySchema, createProjectSchema, updateProjectSchema, updateProjectStatusSchema, updateStatusTextsSchema, createCustomerActionSchema, updateCustomerActionSchema, proposeDeliverySlotSchema, updateSchouwSchema, updateWeekPlanningSchema, createRenderVersionSchema, completeOpleveringSchema, assignPartnerSchema, createMilestoneSchema, updateMilestoneSchema, createPhotoSchema, updatePhotoSchema, createProjectDocumentSchema, } from './project.schema.js';
 const projectIdParamSchema = z.object({
-    id: z.string().uuid('Invalid project UUID'),
+    id: z.string().min(1, 'Project ID is required'),
 });
 const milestoneIdParamSchema = z.object({
     id: z.string().uuid('Invalid project UUID'),

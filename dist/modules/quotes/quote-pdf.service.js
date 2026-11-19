@@ -88,7 +88,7 @@ export class QuotePdfService {
         const woodType = v?.woodType || 'Thermo Frake';
         const dimensions = v?.dimensionsText || '240 x 80 cm';
         // Dynamic company settings values with robust fallbacks
-        const compName = companySettings?.companyName || 'Vanuit Ambacht B.V.';
+        const compName = companySettings?.companyName?.replace(/\s*(?:Meesters\s*)?B\.V\.?/i, '').trim() || 'Vanuit Ambacht';
         const compAddress = companySettings?.address
             ? `${companySettings.address}, ${companySettings.postalCode ? companySettings.postalCode + ' ' : ''}${companySettings.city || 'Amsterdam'}`
             : 'Koningshof 33, 3451 LM Vleuten';
@@ -139,7 +139,7 @@ export class QuotePdfService {
       (Status: ${this.escapePdfText(quote.status.toUpperCase())}) Tj
       0 -180 Td
       /F3 9 Tf
-      (Pagina 1 van 6  |  Vanuit Ambacht B.V.  |  www.vanuitambacht.nl) Tj
+      (Pagina 1 van 6  |  Vanuit Ambacht  |  www.vanuitambacht.nl) Tj
       ET
     `);
         // =========================================================================
@@ -212,7 +212,7 @@ export class QuotePdfService {
       (Geen dure showroom is een bewuste keuze. Zo betaal je voor vakwerk en materiaal, niet voor overhead.) Tj
       0 -120 Td
       /F3 9 Tf
-      (Pagina 2 van 6  |  Vanuit Ambacht B.V.  |  www.vanuitambacht.nl) Tj
+      (Pagina 2 van 6  |  Vanuit Ambacht  |  www.vanuitambacht.nl) Tj
       ET
     `);
         // =========================================================================
@@ -268,7 +268,7 @@ export class QuotePdfService {
       (Behoudt jarenlang zijn warme uitstraling en veroudert in de loop der tijd stijlvol zilvergrijs.) Tj
       0 -140 Td
       /F3 9 Tf
-      (Pagina 3 van 6  |  Vanuit Ambacht B.V.  |  www.vanuitambacht.nl) Tj
+      (Pagina 3 van 6  |  Vanuit Ambacht  |  www.vanuitambacht.nl) Tj
       ET
     `);
         // =========================================================================
@@ -338,7 +338,7 @@ export class QuotePdfService {
       ${instalmentsText}
       0 -40 Td
       /F3 9 Tf
-      (Pagina 4 van 6  |  Vanuit Ambacht B.V.  |  www.vanuitambacht.nl) Tj
+      (Pagina 4 van 6  |  Vanuit Ambacht  |  www.vanuitambacht.nl) Tj
       ET
     `);
         // =========================================================================
@@ -393,7 +393,7 @@ export class QuotePdfService {
       0 -16 Td
       (Datum: ${this.escapePdfText(dateStr)}) Tj
       0 -16 Td
-      (Handtekening: Vanuit Ambacht B.V.) Tj
+      (Handtekening: Vanuit Ambacht) Tj
       0 -28 Td
       /F2 10 Tf
       (DIGITAAL AUDIT RAPPORT:) Tj
@@ -468,7 +468,7 @@ export class QuotePdfService {
       (aanspreekpunt, inclusief meerjarige constructieve garantie op het meubel.) Tj
       0 -120 Td
       /F3 9 Tf
-      (Pagina 6 van 6  |  Vanuit Ambacht B.V.  |  www.vanuitambacht.nl) Tj
+      (Pagina 6 van 6  |  Vanuit Ambacht  |  www.vanuitambacht.nl) Tj
       ET
     `);
         return this.assemblePdfDocument(pagesContent);

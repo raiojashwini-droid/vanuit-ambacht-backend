@@ -10,6 +10,7 @@ import {
   partnerPriceRequests,
   partnerOffers,
   quotes,
+  projects,
 } from '../../db/schema.js';
 import { customerService } from '../customers/customer.service.js';
 import type {
@@ -696,6 +697,12 @@ export class LeadService {
       }
     }
 
+    // If advancing to Step 6+ (Customer Approval / Won), trigger automatic customer and project creation
+    if (step >= 6) {
+      const conversion = await this.convertToCustomer(id);
+      return conversion.lead;
+    }
+
     const [updated] = await db
       .update(leads)
       .set({
@@ -738,11 +745,20 @@ export class LeadService {
       throw new LeadError('Lead not found', 404, 'LEAD_NOT_FOUND');
     }
 
+    if (status === 'lost' && (!lostReason || !lostReason.trim())) {
+      throw new LeadError('A reason is required when marking a lead as lost', 400, 'LOST_REASON_REQUIRED');
+    }
+
+    if (status === 'won') {
+      const conv = await this.convertToCustomer(id);
+      return conv.lead;
+    }
+
     const [updated] = await db
       .update(leads)
       .set({
         status,
-        lostReason: status === 'lost' ? lostReason || 'No reason specified' : null,
+        lostReason: status === 'lost' ? (lostReason?.trim() || 'Geen reden opgegeven') : null,
         updatedAt: new Date(),
       })
       .where(eq(leads.id, id))
@@ -925,40 +941,60 @@ export class LeadService {
    * Transactional 1-Click Conversion: Converts a Lead into an Active Customer record
    * Prevents duplicate conversion and links customerId.
    */
-  async convertToCustomer(leadId: string): Promise<{ customer: any; lead: LeadListItem }> {
+  async convertToCustomer(leadId: string): Promise<{ customer: any; lead: LeadListItem; project?: any }> {
     const [leadRecord] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
     if (!leadRecord) {
       throw new LeadError('Lead not found', 404, 'LEAD_NOT_FOUND');
     }
 
-    if (leadRecord.customerId) {
-      throw new LeadError('Lead has already been converted to a customer', 409, 'ALREADY_CONVERTED');
-    }
+    let customerIdToLink = leadRecord.customerId;
+    let customerData: any = null;
 
-    // Split Name into firstName and lastName
-    const nameParts = leadRecord.name.trim().split(/\s+/);
-    const firstName = nameParts[0] || 'Customer';
-    const lastName = nameParts.slice(1).join(' ') || 'Lead';
-
-    let customerIdToLink: string;
-    let customerData: any;
-
-    // Check if customer with same email already exists in customers table
-    if (leadRecord.email) {
+    if (customerIdToLink) {
       const [existingCust] = await db
         .select()
         .from(customers)
-        .where(eq(customers.email, leadRecord.email.toLowerCase()))
+        .where(eq(customers.id, customerIdToLink))
         .limit(1);
+      customerData = existingCust || null;
+    }
 
-      if (existingCust) {
-        customerIdToLink = existingCust.id;
-        customerData = existingCust;
+    if (!customerData) {
+      // Split Name into firstName and lastName
+      const nameParts = leadRecord.name.trim().split(/\s+/);
+      const firstName = nameParts[0] || 'Customer';
+      const lastName = nameParts.slice(1).join(' ') || 'Lead';
+
+      // Check if customer with same email already exists in customers table
+      if (leadRecord.email) {
+        const [existingCust] = await db
+          .select()
+          .from(customers)
+          .where(eq(customers.email, leadRecord.email.toLowerCase()))
+          .limit(1);
+
+        if (existingCust) {
+          customerIdToLink = existingCust.id;
+          customerData = existingCust;
+        } else {
+          const createdCustomer = await customerService.create({
+            firstName,
+            lastName,
+            email: leadRecord.email,
+            phone: leadRecord.phone || '+31 6 00000000',
+            streetAddress: leadRecord.address || null,
+            city: leadRecord.city || 'Amsterdam',
+            country: 'NL',
+            notes: `Converted from lead ${leadRecord.leadNumber} (${leadRecord.name})`,
+          });
+          customerIdToLink = createdCustomer.id;
+          customerData = createdCustomer;
+        }
       } else {
         const createdCustomer = await customerService.create({
           firstName,
           lastName,
-          email: leadRecord.email,
+          email: `${leadRecord.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@client.vanuitambacht.nl`,
           phone: leadRecord.phone || '+31 6 00000000',
           streetAddress: leadRecord.address || null,
           city: leadRecord.city || 'Amsterdam',
@@ -968,19 +1004,6 @@ export class LeadService {
         customerIdToLink = createdCustomer.id;
         customerData = createdCustomer;
       }
-    } else {
-      const createdCustomer = await customerService.create({
-        firstName,
-        lastName,
-        email: `${leadRecord.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@client.vanuitambacht.nl`,
-        phone: leadRecord.phone || '+31 6 00000000',
-        streetAddress: leadRecord.address || null,
-        city: leadRecord.city || 'Amsterdam',
-        country: 'NL',
-        notes: `Converted from lead ${leadRecord.leadNumber} (${leadRecord.name})`,
-      });
-      customerIdToLink = createdCustomer.id;
-      customerData = createdCustomer;
     }
 
     // Update lead with customerId and advance step to 6 (Customer Approval) / Won if earlier
@@ -996,8 +1019,72 @@ export class LeadService {
       .where(eq(leads.id, leadId))
       .returning();
 
+    // 2. Automatic Project Creation on Step 6 (Won)
+    let projectData: any = null;
+    const [existingProject] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.customerId, customerIdToLink!))
+      .limit(1);
+
+    if (existingProject) {
+      projectData = existingProject;
+    } else {
+      // Find quote if any
+      const [leadQuote] = await db
+        .select()
+        .from(quotes)
+        .where(eq(quotes.leadId, leadId))
+        .orderBy(desc(quotes.createdAt))
+        .limit(1);
+
+      const year = new Date().getFullYear();
+      const prefix = `PRJ-${year}-`;
+      const [latestProj] = await db
+        .select({ projectNumber: projects.projectNumber })
+        .from(projects)
+        .where(ilike(projects.projectNumber, `${prefix}%`))
+        .orderBy(desc(projects.projectNumber))
+        .limit(1);
+
+      let nextSeq = 1;
+      if (latestProj?.projectNumber) {
+        const parts = latestProj.projectNumber.split('-');
+        const seq = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(seq)) nextSeq = seq + 1;
+      }
+      const projectNumber = `${prefix}${String(nextSeq).padStart(3, '0')}`;
+      const productCategory = (leadRecord.productType || '').includes('garden') ? 'garden_room' : 'outdoor_kitchen';
+      const productDisplayTitle = productCategory === 'garden_room' ? 'Buitenverblijf' : 'Buitenkeuken';
+      const sizeNote = leadRecord.dimensionsInquiry ? ` · ${leadRecord.dimensionsInquiry}` : '';
+      const projectName = `${leadRecord.name} · ${productDisplayTitle}${sizeNote}`;
+
+      const [createdProj] = await db
+        .insert(projects)
+        .values({
+          projectNumber,
+          quoteId: leadQuote?.id || null,
+          customerId: customerIdToLink!,
+          projectType: productCategory as any,
+          name: projectName,
+          status: 'in_progress',
+          orderStatus: 'in_voorbereiding',
+          deliveryAddress: leadRecord.address || 'Op locatie',
+          city: leadRecord.city || 'Nederland',
+          contractValue: sql`0::numeric`,
+        })
+        .returning();
+
+      projectData = createdProj;
+      syncService.bump('projects');
+    }
+
+    syncService.bump('leads');
+    syncService.bump('customers');
+
     return {
       customer: customerData,
+      project: projectData,
       lead: {
         id: updatedLead.id,
         leadNumber: updatedLead.leadNumber,

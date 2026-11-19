@@ -437,6 +437,9 @@ export class ProjectService {
    * GET /api/projects/:id
    */
   async getById(id: string, user: JwtTokenPayload): Promise<ProjectDto | PartnerProjectDto | CustomerProjectDto> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const whereCond = isUuid ? or(eq(projects.id, id), eq(projects.projectNumber, id)) : eq(projects.projectNumber, id);
+
     const [row] = await db
       .select({
         project: projects,
@@ -446,7 +449,7 @@ export class ProjectService {
       .from(projects)
       .leftJoin(customers, eq(projects.customerId, customers.id))
       .leftJoin(partners, eq(projects.partnerId, partners.id))
-      .where(eq(projects.id, id))
+      .where(whereCond)
       .limit(1);
 
     if (!row) {
@@ -466,12 +469,14 @@ export class ProjectService {
       }
     }
 
+    const realId = row.project.id;
+
     // Fetch related milestones, photos, documents, invoice count
     const [milestonesList, photosList, docsList, [invCount]] = await Promise.all([
-      db.select().from(projectMilestones).where(eq(projectMilestones.projectId, id)).orderBy(asc(projectMilestones.sequenceOrder)),
-      db.select().from(projectPhotos).where(eq(projectPhotos.projectId, id)).orderBy(desc(projectPhotos.createdAt)),
-      db.select().from(documents).where(eq(documents.projectId, id)).orderBy(desc(documents.createdAt)),
-      db.select({ count: sql<number>`count(*)::int` }).from(invoices).where(eq(invoices.projectId, id)),
+      db.select().from(projectMilestones).where(eq(projectMilestones.projectId, realId)).orderBy(asc(projectMilestones.sequenceOrder)),
+      db.select().from(projectPhotos).where(eq(projectPhotos.projectId, realId)).orderBy(desc(projectPhotos.createdAt)),
+      db.select().from(documents).where(eq(documents.projectId, realId)).orderBy(desc(documents.createdAt)),
+      db.select({ count: sql<number>`count(*)::int` }).from(invoices).where(eq(invoices.projectId, realId)),
     ]);
 
     const full = this.mapToProjectDto(row.project, {
