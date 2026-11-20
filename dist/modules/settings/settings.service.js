@@ -34,8 +34,8 @@ export class SettingsService {
             country: row.country,
             standardVatRate: parseFloat(row.standardVatRate || '21.00'),
             lowVatRate: parseFloat(row.lowVatRate || '9.00'),
-            quotePrefix: row.quotePrefix || '#Q-2004',
-            invoicePrefix: row.invoicePrefix || '#INV-902',
+            quotePrefix: row.quotePrefix || 'OF-2026',
+            invoicePrefix: row.invoicePrefix || '2026',
             defaultMarginPercentage: parseFloat(row.defaultMarginPercentage || '35.00'),
             quoteTermsText: row.quoteTermsText,
             fiscalLockDate: row.fiscalLockDate ? String(row.fiscalLockDate) : null,
@@ -85,8 +85,8 @@ export class SettingsService {
                 country: 'Nederland',
                 standardVatRate: '21.00',
                 lowVatRate: '9.00',
-                quotePrefix: '#Q-2026',
-                invoicePrefix: '#INV-2026',
+                quotePrefix: 'OF-2026',
+                invoicePrefix: '2026',
                 defaultMarginPercentage: '35.00',
             })
                 .returning();

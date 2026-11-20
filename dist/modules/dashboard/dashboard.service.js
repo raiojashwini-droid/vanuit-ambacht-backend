@@ -106,11 +106,11 @@ export class DashboardService {
         const daysInPeriod = Math.max(1, Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)));
         const periodAdSpend = Math.round((monthlyAdSpend / 30) * daysInPeriod);
         const costPerLeadVal = totalLeadsCount > 0 ? Number((periodAdSpend / totalLeadsCount).toFixed(2)) : 0;
-        // Single Source of Truth: Quotes Sent (Leads at Step >= 5 or Quotes sent)
-        const quotesSentCount = Math.max(currentQuotes.filter((q) => q.status !== 'draft').length, currentLeads.filter((l) => l.workflowStep >= 5 || l.status === 'quote_sent' || l.status === 'won').length);
+        // Single Source of Truth: Quotes Sent (strictly from sent/approved quotes in quotes table)
+        const quotesSentCount = currentQuotes.filter((q) => q.status !== 'draft').length;
         const quotePercentageVal = totalLeadsCount > 0 ? Number(((quotesSentCount / totalLeadsCount) * 100).toFixed(1)) : 0;
-        // Single Source of Truth: Orders Won (Leads at Step >= 6 / Won or Quotes approved)
-        const ordersWonCount = Math.max(currentQuotes.filter((q) => q.status === 'approved').length, currentLeads.filter((l) => l.status === 'won' || l.workflowStep >= 6).length);
+        // Single Source of Truth: Orders Won (strictly from approved quotes in quotes table)
+        const ordersWonCount = currentQuotes.filter((q) => q.status === 'approved').length;
         const conversionRateVal = totalLeadsCount > 0
             ? Number(((ordersWonCount / totalLeadsCount) * 100).toFixed(1))
             : quotesSentCount > 0
@@ -239,23 +239,32 @@ export class DashboardService {
      */
     async getConversionFunnel(filter) {
         const { start, end } = this.resolveDateRanges(filter);
-        const periodLeads = await db
-            .select({
-            id: leads.id,
-            status: leads.status,
-            workflowStep: leads.workflowStep,
-        })
-            .from(leads)
-            .where(and(gte(leads.createdAt, start), lte(leads.createdAt, end)));
+        const [periodLeads, periodQuotes] = await Promise.all([
+            db
+                .select({
+                id: leads.id,
+                status: leads.status,
+                workflowStep: leads.workflowStep,
+            })
+                .from(leads)
+                .where(and(gte(leads.createdAt, start), lte(leads.createdAt, end))),
+            db
+                .select({
+                id: quotes.id,
+                status: quotes.status,
+            })
+                .from(quotes)
+                .where(and(gte(quotes.createdAt, start), lte(quotes.createdAt, end))),
+        ]);
         const totalCount = periodLeads.length;
         // Stage 1: All Leads in period
         const leadsCount = totalCount;
         // Stage 2: In discussion (workflowStep >= 2 or status = in_conversation)
-        const inDiscussionCount = periodLeads.filter((l) => l.workflowStep >= 2 || l.status === 'in_conversation' || l.status === 'price_requested' || l.status === 'price_received' || l.status === 'quote_sent' || l.status === 'won').length;
-        // Stage 3: Quote Sent (workflowStep >= 5 or status = quote_sent / won)
-        const quoteSentCount = periodLeads.filter((l) => l.workflowStep >= 5 || l.status === 'quote_sent' || l.status === 'won').length;
-        // Stage 4: Won (status = won or workflowStep >= 6)
-        const wonCount = periodLeads.filter((l) => l.status === 'won' || l.workflowStep >= 6).length;
+        const inDiscussionCount = periodLeads.filter((l) => l.workflowStep >= 2 || l.status === 'in_conversation' || l.status === 'price_requested' || l.status === 'price_received').length;
+        // Stage 3: Quote Sent (strictly from sent quotes in quotes table)
+        const quoteSentCount = periodQuotes.filter((q) => q.status !== 'draft').length;
+        // Stage 4: Won (strictly from approved quotes in quotes table)
+        const wonCount = periodQuotes.filter((q) => q.status === 'approved').length;
         const calcPct = (cnt) => (totalCount > 0 ? Math.round((cnt / totalCount) * 100) : 0);
         return {
             leads: {

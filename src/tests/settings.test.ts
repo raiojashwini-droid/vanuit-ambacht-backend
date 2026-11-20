@@ -180,8 +180,8 @@ async function runTests() {
     bankName: 'ABN AMRO Bank N.V.',
     standardVatRate: 21,
     lowVatRate: 9,
-    quotePrefix: '#Q-2026',
-    invoicePrefix: '#INV-2026',
+    quotePrefix: 'OF-2026',
+    invoicePrefix: '2026',
     defaultMarginPercentage: 36.5,
     quoteTermsText: 'Standard 30-day quote validity and 50% deposit required.',
   };
@@ -198,8 +198,8 @@ async function runTests() {
     'PUT /api/settings/company successfully updates company profile, prefixes, and VAT rates',
     updateCompanyRes.statusCode === 200 &&
       updatedCompany.companyName === 'Vanuit Ambacht Meesters B.V.' &&
-      updatedCompany.quotePrefix === '#Q-2026' &&
-      updatedCompany.invoicePrefix === '#INV-2026' &&
+      updatedCompany.quotePrefix === 'OF-2026' &&
+      updatedCompany.invoicePrefix === '2026' &&
       updatedCompany.defaultMarginPercentage === 36.5,
     `Updated Name: ${updatedCompany.companyName}, Margin: ${updatedCompany.defaultMarginPercentage}%`
   );
