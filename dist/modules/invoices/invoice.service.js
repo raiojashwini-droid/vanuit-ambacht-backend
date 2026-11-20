@@ -21,9 +21,14 @@ export class InvoiceService {
         let searchPrefix = `${prefix}-${year}-`;
         if (prefix === 'INV') {
             const [comp] = await executor.select({ invoicePrefix: companySettings.invoicePrefix }).from(companySettings).limit(1);
-            let raw = comp?.invoicePrefix?.trim() || `INV-${year}`;
+            let raw = comp?.invoicePrefix?.trim() || `${year}`;
             raw = raw.replace(/^#/, '');
-            searchPrefix = raw.endsWith('-') ? raw : `${raw}-`;
+            if (/^\d{4}$/.test(raw)) {
+                searchPrefix = raw;
+            }
+            else {
+                searchPrefix = raw.endsWith('-') ? raw : `${raw}-`;
+            }
         }
         const [latest] = await executor
             .select({ invoiceNumber: invoices.invoiceNumber })
