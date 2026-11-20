@@ -127,15 +127,15 @@ async function clearAllOperationalData() {
         is_active = true;
     `);
 
-    // Customer user
-    const [cUser] = await sqlClient.unsafe(`
+    // Customer user (preserved in users table for auth login, 0 customers in operational table)
+    await sqlClient.unsafe(`
       INSERT INTO users (id, email, password_hash, role, full_name, is_active, created_at, updated_at)
       VALUES (
         gen_random_uuid(),
         'customer@vanuitambacht.nl',
         '${customerHash}',
         'customer',
-        'Bjorn Valk',
+        'Customer Account',
         true,
         NOW(),
         NOW()
@@ -143,32 +143,7 @@ async function clearAllOperationalData() {
       ON CONFLICT (email) DO UPDATE SET
         password_hash = '${customerHash}',
         is_active = true,
-        role = 'customer'
-      RETURNING id;
-    `);
-
-    // Fresh customer profile (with 0 projects, 0 quotes, 0 invoices)
-    await sqlClient.unsafe(`
-      INSERT INTO customers (
-        id, user_id, customer_number, first_name, last_name, email, phone, street_address, city, postal_code, country, created_at, updated_at
-      ) VALUES (
-        gen_random_uuid(),
-        '${cUser.id}',
-        'CUST-2026-001',
-        'Bjorn',
-        'Valk',
-        'customer@vanuitambacht.nl',
-        '+31 6 55556666',
-        'Keizersgracht 101',
-        'Amsterdam',
-        '1015 CJ',
-        'NL',
-        NOW(),
-        NOW()
-      )
-      ON CONFLICT (customer_number) DO UPDATE SET
-        user_id = '${cUser.id}',
-        email = 'customer@vanuitambacht.nl';
+        role = 'customer';
     `);
 
     console.log('✅ Core authenticable users preserved (admin@vanuitambacht.nl, partner@vanuitambacht.nl, customer@vanuitambacht.nl)');
